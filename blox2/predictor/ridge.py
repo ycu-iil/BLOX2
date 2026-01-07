@@ -8,8 +8,8 @@ class RidgePointPredictor(Predictor):
         self.fit_intercept = fit_intercept
         self.random_state = random_state
 
-    def fit(self, observed_samples: list[DataPoint]):
-        X, Y = self.prep_data(observed_samples)
+    def fit(self, observed_points: list[DataPoint]):
+        X, Y = self.prep_data(observed_points)
         
         # multi-target regression
         self._model = Ridge(alpha=self.alpha, fit_intercept=self.fit_intercept, random_state=self.random_state)
