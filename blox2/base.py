@@ -1,19 +1,35 @@
 from abc import ABC, abstractmethod
+import numpy as np
 
-class Point(ABC):
-    def __init__(self, evaluation_results=None):
+class DataPoint(ABC):
+    def __init__(self, evaluated_values=None):
         self.stein_novelty_equiv = 0
-        self.evaluation_results = evaluation_results
+        self.evaluated_values: np.ndarray = evaluated_values
 
     @abstractmethod
-    def feature_vector():
+    def feature_vector() -> np.ndarray:
         pass
 
 class Selector(ABC):
-    def __init__(self, observed_samples: list[Point], unchecked_samples: list[Point]):
-        self.observed_samples = observed_samples
-        self.unchecked_samples = unchecked_samples
+    def __init__(self, observed: list[DataPoint], unchecked: list[DataPoint]):
+        self.observed = observed
+        self.unchecked = unchecked
     
     @abstractmethod
-    def next_candidate() -> Point:
+    def next_candidate() -> DataPoint:
         pass
+    
+class Predictor(ABC):
+    @abstractmethod
+    def fit(observed_samples: list[DataPoint]):
+        pass
+    
+    @abstractmethod
+    def pred(x: DataPoint) -> list[np.ndarray]:
+        """Return samples of predicted objective values. For point estimation, return [np.ndarray] (single entry list)."""
+        pass
+    
+    def prep_data(observed_samples: list[DataPoint]):
+        X = np.vstack([np.asarray(s.feature_vector(), float).ravel() for s in observed_samples])
+        Y = np.vstack([np.asarray(s.evaluated_values, float).ravel() for s in observed_samples])
+        return X, Y

@@ -1,2 +1,2 @@
-from .base import Point, Selector
-from .blox2 import BLOX2
+from .base import DataPoint, Selector, Predictor
+from .blox2_selector import BLOX2Selector
