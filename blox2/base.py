@@ -17,7 +17,7 @@ class RawFeature(DataPoint):
         self._feature_vector = feature_vector
         
     def feature_vector(self):
-        return self.feature_vector
+        return self._feature_vector
 
 class Selector(ABC):
     def __init__(self, observed_points: list[DataPoint], unchecked_points: list[DataPoint]):
@@ -38,7 +38,8 @@ class Predictor(ABC):
         """Return samples of predicted objective values. For point estimation, return [np.ndarray] (single entry list)."""
         pass
     
+    @staticmethod
     def prep_data(observed_points: list[DataPoint]):
-        X = np.vstack([np.asarray(s.feature_vector(), float).ravel() for s in observed_points])
-        Y = np.vstack([np.asarray(s.observed_values, float).ravel() for s in observed_points])
+        X = np.vstack([np.asarray(p.feature_vector(), float).ravel() for p in observed_points])
+        Y = np.vstack([np.asarray(p.observed_values, float).ravel() for p in observed_points])
         return X, Y
