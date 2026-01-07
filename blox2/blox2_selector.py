@@ -1,3 +1,4 @@
+import time
 import numpy as np
 from .base import DataPoint, Selector, Predictor
 from .utils import stein_novelty_repli
@@ -14,6 +15,7 @@ class BLOX2Selector(Selector):
         
     def best_stein_novelty(self) -> DataPoint:
         Y = np.vstack([q.observed_values for q in self.observed_points])
+        t0 = time.perf_counter()
         n, d = Y.shape
 
         best_p = None
@@ -28,6 +30,8 @@ class BLOX2Selector(Selector):
                 best_score = score
                 best_p = p
 
+        if self.verbose:
+            self.passed_time_blox2 += time.perf_counter() - t0
         return best_p
             
     def best_stein_novelty_repli(self) -> DataPoint:
@@ -35,7 +39,11 @@ class BLOX2Selector(Selector):
         Assumes deterministic point estimation for validation purposes.
         """
         data_list = np.vstack([q.observed_values for q in self.observed_points])
+        t0 = time.perf_counter()
         best_point = max(self.unchecked_points, key=lambda p: stein_novelty_repli(self.predictor.pred(p)[0], data_list, self.squared_sigma))
+        
+        if self.verbose:
+            self.passed_time_repli += time.perf_counter() - t0
         return best_point
                 
     def next_candidate(self) -> DataPoint:
