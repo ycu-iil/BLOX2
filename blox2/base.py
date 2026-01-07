@@ -4,7 +4,6 @@ import numpy as np
 class DataPoint(ABC):
     def __init__(self, id: int, observed_values=None):
         self.id = id
-        self.stein_novelty_equiv = 0
         self.observed_values: np.ndarray = observed_values
 
     @abstractmethod
