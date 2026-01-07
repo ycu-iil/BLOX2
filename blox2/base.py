@@ -7,8 +7,16 @@ class DataPoint(ABC):
         self.evaluated_values: np.ndarray = evaluated_values
 
     @abstractmethod
-    def feature_vector() -> np.ndarray:
+    def feature_vector(self) -> np.ndarray:
         pass
+    
+class RawFeature(DataPoint):
+    def __init__(self, feature_vector: np.ndarray, evaluated_values=None):
+        super().__init__(evaluated_values)
+        self._feature_vector = feature_vector
+        
+    def feature_vector(self):
+        return self.feature_vector
 
 class Selector(ABC):
     def __init__(self, observed: list[DataPoint], unchecked: list[DataPoint]):
