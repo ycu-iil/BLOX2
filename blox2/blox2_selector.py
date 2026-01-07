@@ -8,34 +8,31 @@ class BLOX2Selector(Selector):
         self.squared_sigma = squared_sigma
         self.predictor = predictor
         self.verbose = verbose
+        if verbose:
+           self.passed_time_blox2 = 0
+           self.passed_time_repli = 0 
         
-        # initialize stein novelty
-        self.initialize_stein_novelty_equivs()
-    
-    def negative_hesgau_equiv(self, x, y):
-        dist = np.sum((x - y)**2)
-        d = x.shape[0]
-        return (dist - d * self.squared_sigma) * np.exp(-dist/(2*self.squared_sigma))
-    
-    def refresh_stein_novelty_equivs(self):
-        self.predictor.fit(self.observed_points)
+    def best_stein_novelty(self) -> DataPoint:
+        Y = np.vstack([q.observed_values for q in self.observed_points])
+        n, d = Y.shape
+
+        best_p = None
+        best_score = -np.inf
+
         for p in self.unchecked_points:
-            x_pred = self.predictor.pred(p)[0] # TODO: distribution compat
-            y = self.observed_points[-1].observed_values
-            p.stein_novelty_equiv += self.negative_hesgau_equiv(x_pred, y)
-            
-    def initialize_stein_novelty_equivs(self):
-        self.predictor.fit(self.observed_points)
-        for p in self.unchecked_points:
-            x_pred = self.predictor.pred(p)[0] # TODO: distribution compat
-            for q in self.observed_points:
-                y = q.observed_values
-                p.stein_novelty_equiv += self.negative_hesgau_equiv(x_pred, y)
+            x = self.predictor.pred(p)[0]
+            diff = Y - x
+            dist = (diff * diff).sum(axis=1)
+            score = np.sum((dist - d * self.squared_sigma) * np.exp(-dist / (2 * self.squared_sigma)))
+            if score > best_score:
+                best_score = score
+                best_p = p
+
+        return best_p
             
     def best_stein_novelty_repli(self) -> DataPoint:
         """
         Assumes deterministic point estimation for validation purposes.
-        predictor.fit() is called in refresh_stein_novelty_equivs(), which should be called before this method.
         """
         data_list = np.vstack([q.observed_values for q in self.observed_points])
         best_point = max(self.unchecked_points, key=lambda p: stein_novelty_repli(self.predictor.pred(p)[0], data_list, self.squared_sigma))
@@ -46,15 +43,12 @@ class BLOX2Selector(Selector):
             print("The last entry of observed_points is not observed yet.") # TODO: use logger
             return None
         else:
-            self.refresh_stein_novelty_equivs()
-            best_point = max(self.unchecked_points, key=lambda p: p.stein_novelty_equiv)
+            self.predictor.fit(self.observed_points)
+            best_point = self.best_stein_novelty()
             if self.verbose:
                 best_point_valid = self.best_stein_novelty_repli()
                 if best_point == best_point_valid:
                     print(f"Same best point at {len(self.observed_points)} observed points.")
                 else:
                     print(f"WARNING: Different best point at {len(self.observed_points)} observed points.")
-                    data_list = np.vstack([q.observed_values for q in self.observed_points])
-                    for p in self.unchecked_points:
-                        print(f"used: {p.stein_novelty_equiv}, repli: {stein_novelty_repli(self.predictor.pred(p)[0], data_list, self.squared_sigma)}")
             return best_point
