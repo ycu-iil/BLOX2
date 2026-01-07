@@ -15,8 +15,6 @@ class BLOX2Selector(Selector):
            self.passed_time_repli = 0
            
     def best_stein_novelty_id(self) -> int:
-        t0 = time.perf_counter()
-        
         Y = self.Y_obs
 
         n, d = Y.shape
@@ -25,6 +23,7 @@ class BLOX2Selector(Selector):
         unobs_ids = self.unobs_ids()
         X_unobs = self.X_unobs(unobs_ids)
         X_pred = self.predictor.pred(X_unobs)
+        t0 = time.perf_counter()
 
         best_id = -1
         best_score = -np.inf
@@ -48,12 +47,12 @@ class BLOX2Selector(Selector):
 
     def best_stein_novelty_repli_id(self) -> int:
         """For validation purpose. Not used for the selection."""
-        t0 = time.perf_counter()
         
         Y = self.Y_obs
         unobs_ids = self.unobs_ids()
         X_unobs = self.X_unobs(unobs_ids)
         X_pred = self.predictor.pred(X_unobs)
+        t0 = time.perf_counter()
 
         best_id = -1
         best_score = -np.inf
