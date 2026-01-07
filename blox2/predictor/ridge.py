@@ -1,6 +1,6 @@
 import numpy as np
 from sklearn.linear_model import Ridge
-from blox2 import Predictor, DataPoint
+from blox2 import Predictor
 
 class RidgePointPredictor(Predictor):
     def __init__(self, alpha: float=1.0, fit_intercept: bool=True, random_state: int=0):
@@ -8,17 +8,12 @@ class RidgePointPredictor(Predictor):
         self.fit_intercept = fit_intercept
         self.random_state = random_state
 
-    def fit(self, observed_points: list[DataPoint]):
-        X, Y = self.prep_data(observed_points)
-        
+    def fit(self, X: np.ndarray, Y: np.ndarray):        
         # multi-target regression
         self._model = Ridge(alpha=self.alpha, fit_intercept=self.fit_intercept, random_state=self.random_state)
         self._model.fit(X, Y)
-        return self
 
-    def pred(self, x: DataPoint) -> list[np.ndarray]:
+    def pred(self, X: np.ndarray) -> np.ndarray:
         if self._model is None:
             raise RuntimeError("Call fit() before pred().")
-        fv = np.asarray(x.feature_vector(), float).ravel().reshape(1, -1)
-        y_hat = np.asarray(self._model.predict(fv)[0], float)  # (n_objectives,)
-        return [y_hat]
+        return self._model.predict(X)
