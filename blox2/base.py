@@ -2,7 +2,8 @@ from abc import ABC, abstractmethod
 import numpy as np
 
 class DataPoint(ABC):
-    def __init__(self, observed_values=None):
+    def __init__(self, id: int, observed_values=None):
+        self.id = id
         self.stein_novelty_equiv = 0
         self.observed_values: np.ndarray = observed_values
 
@@ -11,9 +12,8 @@ class DataPoint(ABC):
         pass
     
 class RawFeature(DataPoint):
-    def __init__(self, feature_vector: np.ndarray, id: int=None, observed_values=None):
-        super().__init__(observed_values)
-        self.id = id
+    def __init__(self, feature_vector: np.ndarray, id: int, observed_values=None):
+        super().__init__(id, observed_values)
         self._feature_vector = feature_vector
         
     def feature_vector(self):
@@ -27,6 +27,15 @@ class Selector(ABC):
     @abstractmethod
     def next_candidate() -> DataPoint:
         pass
+    
+    def observe(self, id: int, observed_values: np.ndarray):
+        for i, p in enumerate(self.unchecked_points):
+            if p.id == id:
+                p.observed_values = np.asarray(observed_values)
+                self.observed_points.append(p)
+                del self.unchecked_points[i]
+                return
+        raise ValueError(f"DataPoint ID {id} not found in unchecked points.")
     
 class Predictor(ABC):
     @abstractmethod
