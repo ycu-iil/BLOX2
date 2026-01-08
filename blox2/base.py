@@ -14,8 +14,7 @@ class Predictor(ABC):
     def pred(self, X: np.ndarray) -> np.ndarray:
         """
         Predict objective values for candidates.
-        Returns point estimates as ndarray of shape (m, d_obj) when X is (m, d_feat),
-        or shape (d_obj,) when X is (d_feat,).
+        Returns point estimates as ndarray of shape (m, d_obj)
         """
         raise NotImplementedError
 
@@ -28,8 +27,7 @@ class Predictor(ABC):
             n_samples: Number of samples to draw.
 
         Returns:
-            samples: (n_samples, m, d_obj) if X is (m, d_feat)
-                     (n_samples, d_obj)    if X is (d_feat,)
+            samples: (n_samples, m, d_obj)
         """
         raise NotImplementedError
 
