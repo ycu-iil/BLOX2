@@ -27,11 +27,11 @@ class Predictor(ABC):
             n_samples: Number of samples to draw.
 
         Returns:
-            samples: (n_samples, m, d_obj)
+            samples: (m, n_samples, d_obj)
         """
         raise NotImplementedError
 
-class Selector(ABC):        
+class Selector(ABC):    
     def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor):
         n_obs = len(observed_features)
         n_unobs = len(unobserved_features)
@@ -54,6 +54,10 @@ class Selector(ABC):
     def best_id(self, X_pred: np.ndarray) -> int:
         raise NotImplementedError
     
+    # needs to be overridden to use posterior distributuon for acquisition functions
+    def use_distribution(self) -> bool:
+        return False
+
     def next_candidate(self) -> int:
         return self.next_candidates(n=1)[0]
     
@@ -71,7 +75,10 @@ class Selector(ABC):
 
         unobs_ids0 = self.unobs_ids()
         X_unobs0 = self.X_unobs(unobs_ids0)
-        X_pred0 = self.predictor.pred(X_unobs0)
+        if self.use_distribution():
+            X_pred0 = self.predictor.pred_samples(X_unobs0)
+        else:
+            X_pred0 = self.predictor.pred(X_unobs0)
 
         # cache predictions by id to rebuild X_pred in the current unobs_ids() order
         pred_by_id = {int(cid): X_pred0[i] for i, cid in enumerate(unobs_ids0)}
@@ -84,7 +91,12 @@ class Selector(ABC):
             if cur_unobs_ids.size == 0:
                 break
 
-            X_pred_cur = np.vstack([pred_by_id[int(cid)] for cid in cur_unobs_ids])
+            # X_pred_cur = np.vstack([pred_by_id[int(cid)] for cid in cur_unobs_ids])
+            if self.use_distribution():
+                X_pred_cur = np.stack([pred_by_id[int(cid)] for cid in cur_unobs_ids], axis=0)
+            else:
+                X_pred_cur = np.vstack([pred_by_id[int(cid)] for cid in cur_unobs_ids])
+                
             cid = int(self.best_id(X_pred_cur))
             if cid < 0:
                 break
@@ -93,7 +105,11 @@ class Selector(ABC):
             temp_added_ids.append(cid)
 
             # virtual observation
-            self.observe(cid, pred_by_id[cid])
+            if self.use_distribution():
+                y_virtual = np.mean(pred_by_id[cid], axis=0)
+                self.observe(cid, y_virtual)
+            else:
+                self.observe(cid, pred_by_id[cid])
 
         # revert virtual observation
         for cid in reversed(temp_added_ids):

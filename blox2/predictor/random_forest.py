@@ -24,19 +24,20 @@ class RandomForestPredictor(Predictor):
             raise RuntimeError("Call fit() before pred().")
         return self._model.predict(X)
 
-    def pred_samples(self, X: np.ndarray, n_samples: int=None) -> np.ndarray:
-        n_samples = n_samples or self.n_estimators
-        
+    def pred_samples(self, X: np.ndarray) -> np.ndarray:
         if self._model is None:
             raise RuntimeError("Call fit() before pred_samples().")
 
-        # collect per-tree predictions
-        # each estimator predicts shape (m,) or (m, d_obj):  normalize to (m, d_obj)
+        X = np.asarray(X, float)
+        if X.ndim == 1:
+            X = X[None, :]
+
         preds = []
         for est in self._model.estimators_:
             p = est.predict(X)
+            p = np.asarray(p)
             if p.ndim == 1:
                 p = p[:, None]
             preds.append(p)
 
-        return np.stack(preds, axis=0)
+        return np.stack(preds, axis=1)
