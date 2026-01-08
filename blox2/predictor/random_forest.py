@@ -3,7 +3,7 @@ from sklearn.ensemble import RandomForestRegressor
 from blox2 import Predictor
 
 class RandomForestPredictor(Predictor):
-    def __init__(self, n_estimators: int=200, max_depth: int=None, min_samples_split: int=2, min_samples_leaf: int=1, max_features: str | float | int = "sqrt", bootstrap: bool=True, oob_score: bool=False, n_jobs: int=-1, random_state: int=0):
+    def __init__(self, n_estimators: int=100, max_depth: int=None, min_samples_split: int=2, min_samples_leaf: int=1, max_features: str | float=1.0, bootstrap: bool=True, oob_score: bool=False, n_jobs: int=-1, random_state: int=0):
         self.n_estimators = n_estimators
         self.max_depth = max_depth
         self.min_samples_split = min_samples_split
