@@ -18,7 +18,7 @@ class Predictor(ABC):
         """
         raise NotImplementedError
 
-    def pred_samples(self, X: np.ndarray, n_samples: int=1) -> np.ndarray:
+    def pred_samples(self, X: np.ndarray) -> np.ndarray:
         """
         Predict objective samples for candidates.
 
