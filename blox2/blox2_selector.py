@@ -5,12 +5,13 @@ from .base import Selector, Predictor
 from .utils import stein_novelty_repli
 
 class BLOX2Selector(Selector):
-    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, normalize_values: bool=True, squared_sigma: float=1, n_obs_samples: int=None, use_distribution: bool=False, verbose: bool=False, compare_selection_time=False):
+    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, normalize_values: bool=True, squared_sigma: float=1, n_obs_samples: int=None, n_chunks: int=256, use_distribution: bool=False, verbose: bool=False, compare_selection_time=False):
         super().__init__(observed_features, observed_values, unobserved_features, predictor, normalize_features, normalize_values, verbose)
         self.squared_sigma = squared_sigma
         self._use_distribution = use_distribution
         self.compare_selection_time = compare_selection_time
         self.n_obs_samples = n_obs_samples
+        self.n_chunks = n_chunks
         if verbose:
             self.best_scores = []
         if compare_selection_time:
@@ -40,30 +41,43 @@ class BLOX2Selector(Selector):
 
         best_id = -1
         best_score = -np.inf
+        
+        chunk_size = 256
 
-        # TODO: batch with chunking
-        for i, cid in enumerate(unobs_ids):
-            if self.use_distribution():
-                d_stein_equivs = []
-                for x in X_pred[i]:
-                    diff = Y - x # (n, d_obj)
-                    dist = (diff * diff).sum(axis=1) # (n,)
-                    d_stein_equiv = np.sum((dist - d * sigma) * np.exp(-dist / (2 * sigma)))
-                    d_stein_equivs.append(d_stein_equiv)
+        if self.use_distribution(): # X_pred: (n_unobs, n_samples, d)
+            for s in range(0, len(unobs_ids), chunk_size):
+                e = min(s + chunk_size, len(unobs_ids))
 
-                score = np.mean(d_stein_equivs) # TODO: compare
-                if score > best_score:
-                    best_score = score
-                    best_id = int(cid)
-            else:
-                x = X_pred[i] # (d_obj,)
-                diff = Y - x # (n, d_obj)
-                dist = (diff * diff).sum(axis=1) # (n,)
-                score = np.sum((dist - d * sigma) * np.exp(-dist / (2 * sigma)))
+                Xc = X_pred[s:e] # (c, n_samples, d)
+                scores = np.zeros(e - s)
 
-                if score > best_score:
-                    best_score = score
-                    best_id = int(cid)
+                for k in range(Xc.shape[1]):
+                    x = Xc[:, k, :] # (c, d)
+                    diff = Y[None, :, :] - x[:, None, :] # (c, n_obs, d)
+                    dist = np.sum(diff * diff, axis=2) # (c, n_obs)
+
+                    scores += np.sum((dist - d * sigma) * np.exp(-dist / (2 * sigma)), axis=1)
+
+                scores /= Xc.shape[1] # mean over samples
+
+                j = np.argmax(scores)
+                if scores[j] > best_score:
+                    best_score = scores[j]
+                    best_id = int(unobs_ids[s + j])
+        else: # X_pred: (n_unobs, d)
+            for s in range(0, len(unobs_ids), chunk_size):
+                e = min(s + chunk_size, len(unobs_ids))
+
+                Xc = X_pred[s:e] # (c, d)
+                diff = Y[None, :, :] - Xc[:, None, :] # (c, n_obs, d)
+                dist = np.sum(diff * diff, axis=2) # (c, n_obs)
+
+                scores = np.sum((dist - d * sigma) * np.exp(-dist / (2 * sigma)), axis=1)
+
+                j = np.argmax(scores)
+                if scores[j] > best_score:
+                    best_score = scores[j]
+                    best_id = int(unobs_ids[s + j])
         
         if self.verbose:
             self.best_scores.append(best_score)
