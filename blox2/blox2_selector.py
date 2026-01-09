@@ -10,13 +10,17 @@ class BLOX2Selector(Selector):
         self.squared_sigma = squared_sigma
         self._use_distribution = use_distribution
         self.compare_selection_time = compare_selection_time
+        if verbose:
+            self.best_scores = []
         if compare_selection_time:
+            self.passed_times_blox2 = []
             self.passed_times_repli = []
             
     def use_distribution(self):
         return self._use_distribution
             
     def best_id(self, X_pred: np.ndarray) -> int:
+        t0 = time.perf_counter()
         Y = self.Y_obs
         _, d = Y.shape
         sigma = self.squared_sigma
@@ -48,13 +52,15 @@ class BLOX2Selector(Selector):
                 if score > best_score:
                     best_score = score
                     best_id = int(cid)
+        
+        if self.verbose:
+            self.best_scores.append(best_score)
 
         if self.compare_selection_time:
+            self.passed_times_blox2.append(time.perf_counter() - t0)
             if not self.use_distribution():
                 best_id_valid = self.best_id_blox_replication(X_pred)
-                if best_id == best_id_valid:
-                    print(f"Same best point at {len(self.obs_ids)} observed points.")
-                else:
+                if best_id != best_id_valid:
                     print(f"WARNING: Different best point at {len(self.obs_ids)} observed points.")
 
         return best_id
