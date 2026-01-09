@@ -5,20 +5,18 @@ from .base import Selector, Predictor
 from .utils import stein_novelty_repli
 
 class BLOX2Selector(Selector):
-    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, squared_sigma: float=0.1, use_distribution: bool=False, verbose: bool=False):
-        super().__init__(observed_features, observed_values, unobserved_features, predictor)
+    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, squared_sigma: float=0.1, use_distribution: bool=False, verbose: bool=False, compare_selection_time=False):
+        super().__init__(observed_features, observed_values, unobserved_features, predictor, verbose)
         self.squared_sigma = squared_sigma
         self._use_distribution = use_distribution
-        self.verbose = verbose
-        if verbose:
-            self.passed_time_blox2 = 0
-            self.passed_time_repli = 0
+        self.compare_selection_time = compare_selection_time
+        if compare_selection_time:
+            self.passed_times_repli = []
             
     def use_distribution(self):
         return self._use_distribution
             
     def best_id(self, X_pred: np.ndarray) -> int:
-        t0 = time.perf_counter()
         Y = self.Y_obs
         _, d = Y.shape
         sigma = self.squared_sigma
@@ -51,8 +49,7 @@ class BLOX2Selector(Selector):
                     best_score = score
                     best_id = int(cid)
 
-        if self.verbose:
-            self.passed_time_blox2 += time.perf_counter() - t0
+        if self.compare_selection_time:
             if not self.use_distribution():
                 best_id_valid = self.best_id_blox_replication(X_pred)
                 if best_id == best_id_valid:
@@ -76,7 +73,7 @@ class BLOX2Selector(Selector):
                 best_score = s
                 best_id = int(cid)
 
-        if self.verbose:
-            self.passed_time_repli += time.perf_counter() - t0
+        if self.compare_selection_time:
+            self.passed_times_repli.append(time.perf_counter() - t0)
 
         return best_id

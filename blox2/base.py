@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import time
 import numpy as np
 import pandas as pd
 
@@ -32,7 +33,7 @@ class Predictor(ABC):
         raise NotImplementedError
 
 class Selector(ABC):    
-    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor):
+    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, verbose: bool=False):
         n_obs = len(observed_features)
         n_unobs = len(unobserved_features)
 
@@ -50,6 +51,12 @@ class Selector(ABC):
         self.unchecked_mask[:n_obs] = False
         
         self.predictor = predictor
+        
+        self.verbose = verbose
+        if verbose:
+            self.passed_times_selection = []
+            self.passed_times_train = []
+            self.passed_times_pred = []
 
     def best_id(self, X_pred: np.ndarray) -> int:
         raise NotImplementedError
@@ -71,14 +78,21 @@ class Selector(ABC):
 
         X_obs = self.X_obs()
         Y_obs = self.Y_obs
+        t0 = time.perf_counter()
         self.predictor.fit(X_obs, Y_obs)
+        if self.verbose:
+            self.passed_times_train.append(time.perf_counter() - t0)
 
         unobs_ids0 = self.unobs_ids()
         X_unobs0 = self.X_unobs(unobs_ids0)
+        
+        t0 = time.perf_counter()
         if self.use_distribution():
             X_pred0 = self.predictor.pred_samples(X_unobs0)
         else:
             X_pred0 = self.predictor.pred(X_unobs0)
+        if self.verbose:
+            self.passed_times_pred.append(time.perf_counter() - t0)
 
         # cache predictions by id to rebuild X_pred in the current unobs_ids() order
         pred_by_id = {int(cid): X_pred0[i] for i, cid in enumerate(unobs_ids0)}
@@ -97,9 +111,10 @@ class Selector(ABC):
             else:
                 X_pred_cur = np.vstack([pred_by_id[int(cid)] for cid in cur_unobs_ids])
                 
-            cid = int(self.best_id(X_pred_cur))
-            if cid < 0:
-                break
+            t0 = time.perf_counter()
+            cid = self.best_id(X_pred_cur)
+            if self.verbose:
+                self.passed_times_selection.append(time.perf_counter() - t0)
 
             selected_ids.append(cid)
             temp_added_ids.append(cid)
