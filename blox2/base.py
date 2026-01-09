@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 import time
 import numpy as np
 import pandas as pd
+from sklearn.preprocessing import StandardScaler
 
 class Predictor(ABC):
     def fit(self, X: np.ndarray, Y: np.ndarray):
@@ -33,19 +34,40 @@ class Predictor(ABC):
         raise NotImplementedError
 
 class Selector(ABC):    
-    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, verbose: bool=False):
+    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, normalize_values: bool=True, verbose: bool=False):
         n_obs = len(observed_features)
         n_unobs = len(unobserved_features)
 
         if n_obs != len(observed_values):
             raise ValueError(f"observed_features ({n_obs}) and observed_values ({len(observed_values)}) must have same length.")
 
-        X_obs = observed_features.to_numpy(dtype=float, copy=True)
-        X_unobs = unobserved_features.to_numpy(dtype=float, copy=True)
+        # X_obs = observed_features.to_numpy(dtype=float, copy=True)
+        # X_unobs = unobserved_features.to_numpy(dtype=float, copy=True)
+        # self.Y_obs: np.ndarray = observed_values.to_numpy(dtype=float, copy=True)
+        
+        X_obs_raw = observed_features.to_numpy(dtype=float, copy=True)
+        X_unobs_raw = unobserved_features.to_numpy(dtype=float, copy=True)
+        Y_obs_raw = observed_values.to_numpy(dtype=float, copy=True)
+        
+        if normalize_features:
+            self.x_scaler = StandardScaler()
+            X_all_raw = np.vstack([X_obs_raw, X_unobs_raw])
+            self.x_scaler.fit(X_all_raw)
+            X_obs = self.x_scaler.transform(X_obs_raw)
+            X_unobs = self.x_scaler.transform(X_unobs_raw)
+        else:
+            X_obs, X_unobs = X_obs_raw, X_unobs_raw
+
+        self.y_scaler = None
+        if normalize_values:
+            self.y_scaler = StandardScaler()
+            self.y_scaler.fit(Y_obs_raw)
+            self.Y_obs = self.y_scaler.transform(Y_obs_raw)
+        else:
+            self.Y_obs = Y_obs_raw
         
         self.X_all: np.ndarray = np.vstack([X_obs, X_unobs])
         self.obs_ids: list[int] = list(range(n_obs))
-        self.Y_obs: np.ndarray = observed_values.to_numpy(dtype=float, copy=True)
 
         self.unchecked_mask: np.ndarray = np.ones(n_obs + n_unobs, dtype=bool)
         self.unchecked_mask[:n_obs] = False
@@ -180,3 +202,8 @@ class Selector(ABC):
         if unobs_ids.size == 0:
             raise ValueError("No unobserved points.")
         return self.X_all[unobs_ids]
+    
+    def inverse_transform_y(self, y_scaled: np.ndarray) -> np.ndarray:
+        if self.y_scaler is None:
+            return y_scaled
+        return self.y_scaler.inverse_transform(y_scaled)
