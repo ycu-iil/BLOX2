@@ -5,11 +5,12 @@ from .base import Selector, Predictor
 from .utils import stein_novelty_repli
 
 class BLOX2Selector(Selector):
-    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, normalize_values: bool=True, squared_sigma: float=1, use_distribution: bool=False, verbose: bool=False, compare_selection_time=False):
+    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, normalize_values: bool=True, squared_sigma: float=1, n_obs_samples: int=None, use_distribution: bool=False, verbose: bool=False, compare_selection_time=False):
         super().__init__(observed_features, observed_values, unobserved_features, predictor, normalize_features, normalize_values, verbose)
         self.squared_sigma = squared_sigma
         self._use_distribution = use_distribution
         self.compare_selection_time = compare_selection_time
+        self.n_obs_samples = n_obs_samples
         if verbose:
             self.best_scores = []
         if compare_selection_time:
@@ -25,6 +26,17 @@ class BLOX2Selector(Selector):
         _, d = Y.shape
         sigma = self.squared_sigma
         unobs_ids = self.unobs_ids()
+        
+        Y_full = self.Y_obs
+        n, d = Y_full.shape
+        sigma = self.squared_sigma
+        unobs_ids = self.unobs_ids()
+
+        if self.n_obs_samples is not None and self.n_obs_samples > 0 and self.n_obs_samples < n:
+            idx = np.random.choice(n, self.n_obs_samples, replace=False)
+            Y = Y_full[idx]
+        else:
+            Y = Y_full
 
         best_id = -1
         best_score = -np.inf
