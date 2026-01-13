@@ -26,7 +26,7 @@ class BLOX2Selector(Selector):
         
         Y_full = Y_obs
         n, d = Y_full.shape
-        sigma = self.squared_sigma
+        sigma2 = self.squared_sigma
         unobs_ids = self.unobs_ids()
 
         if self.n_obs_samples is not None and self.n_obs_samples > 0 and self.n_obs_samples < n:
@@ -37,12 +37,10 @@ class BLOX2Selector(Selector):
 
         best_id = -1
         best_score = -np.inf
-        
-        chunk_size = 256
 
         if self.use_distribution(): # X_pred: (n_unobs, n_samples, d)
-            for s in range(0, len(unobs_ids), chunk_size):
-                e = min(s + chunk_size, len(unobs_ids))
+            for s in range(0, len(unobs_ids), self.n_chunks):
+                e = min(s + self.n_chunks, len(unobs_ids))
 
                 Xc = X_pred[s:e] # (c, n_samples, d)
                 scores = np.zeros(e - s)
@@ -52,7 +50,7 @@ class BLOX2Selector(Selector):
                     diff = Y[None, :, :] - x[:, None, :] # (c, n_obs, d)
                     dist = np.sum(diff * diff, axis=2) # (c, n_obs)
 
-                    scores += np.sum((dist - d * sigma) * np.exp(-dist / (2 * sigma)), axis=1)
+                    scores += np.sum((dist - d * sigma2) * np.exp(-dist / (2 * sigma2)), axis=1)
 
                 scores /= Xc.shape[1] # mean over samples
 
@@ -61,14 +59,14 @@ class BLOX2Selector(Selector):
                     best_score = scores[j]
                     best_id = int(unobs_ids[s + j])
         else: # X_pred: (n_unobs, d)
-            for s in range(0, len(unobs_ids), chunk_size):
-                e = min(s + chunk_size, len(unobs_ids))
+            for s in range(0, len(unobs_ids), self.n_chunks):
+                e = min(s + self.n_chunks, len(unobs_ids))
 
                 Xc = X_pred[s:e] # (c, d)
                 diff = Y[None, :, :] - Xc[:, None, :] # (c, n_obs, d)
                 dist = np.sum(diff * diff, axis=2) # (c, n_obs)
 
-                scores = np.sum((dist - d * sigma) * np.exp(-dist / (2 * sigma)), axis=1)
+                scores = np.sum((dist - d * sigma2) * np.exp(-dist / (2 * sigma2)), axis=1)
 
                 j = np.argmax(scores)
                 if scores[j] > best_score:
