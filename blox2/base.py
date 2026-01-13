@@ -40,14 +40,10 @@ class Selector(ABC):
 
         if n_obs != len(observed_values):
             raise ValueError(f"observed_features ({n_obs}) and observed_values ({len(observed_values)}) must have same length.")
-
-        # X_obs = observed_features.to_numpy(dtype=float, copy=True)
-        # X_unobs = unobserved_features.to_numpy(dtype=float, copy=True)
-        # self.Y_obs: np.ndarray = observed_values.to_numpy(dtype=float, copy=True)
         
         X_obs_raw = observed_features.to_numpy(dtype=float, copy=True)
         X_unobs_raw = unobserved_features.to_numpy(dtype=float, copy=True)
-        Y_obs_raw = observed_values.to_numpy(dtype=float, copy=True)
+        self.Y_obs_raw = observed_values.to_numpy(dtype=float, copy=True)
         
         if normalize_features:
             self.x_scaler = StandardScaler()
@@ -58,13 +54,8 @@ class Selector(ABC):
         else:
             X_obs, X_unobs = X_obs_raw, X_unobs_raw
 
+        self.normalize_values = normalize_values
         self.y_scaler = None
-        if normalize_values:
-            self.y_scaler = StandardScaler()
-            self.y_scaler.fit(Y_obs_raw)
-            self.Y_obs = self.y_scaler.transform(Y_obs_raw)
-        else:
-            self.Y_obs = Y_obs_raw
         
         self.X_all: np.ndarray = np.vstack([X_obs, X_unobs])
         self.obs_ids: list[int] = list(range(n_obs))
@@ -80,7 +71,7 @@ class Selector(ABC):
             self.passed_times_train = []
             self.passed_times_pred = []
 
-    def best_id(self, X_pred: np.ndarray) -> int:
+    def best_id(self, X_pred: np.ndarray, Y_obs: np.ndarray) -> int:
         raise NotImplementedError
     
     # needs to be overridden to use posterior distributuon for acquisition functions
@@ -94,12 +85,19 @@ class Selector(ABC):
         if n <= 0:
             return []
 
-        if self.Y_obs.size == 0:
+        if self.Y_obs_raw.size == 0:
             print("No observed point.")
             return []
 
         X_obs = self.X_obs()
-        Y_obs = self.Y_obs
+        
+        if self.normalize_values:
+            self.y_scaler = StandardScaler()
+            self.y_scaler.fit(self.Y_obs_raw)
+            Y_obs = self.y_scaler.transform(self.Y_obs_raw)
+        else:
+            Y_obs = self.Y_obs_raw
+
         t0 = time.perf_counter()
         self.predictor.fit(X_obs, Y_obs)
         if self.verbose:
@@ -134,7 +132,7 @@ class Selector(ABC):
                 X_pred_cur = np.vstack([pred_by_id[int(cid)] for cid in cur_unobs_ids])
                 
             t0 = time.perf_counter()
-            cid = self.best_id(X_pred_cur)
+            cid = self.best_id(X_pred_cur, Y_obs)
             if self.verbose:
                 self.passed_times_selection.append(time.perf_counter() - t0)
 
@@ -161,10 +159,10 @@ class Selector(ABC):
         y = np.asarray(observed_values, float).ravel()
 
         self.obs_ids.append(id)
-        if self.Y_obs.size == 0:
-            self.Y_obs = y[None, :]
+        if self.Y_obs_raw.size == 0:
+            self.Y_obs_raw = y[None, :]
         else:
-            self.Y_obs = np.vstack([self.Y_obs, y[None, :]])
+            self.Y_obs_raw = np.vstack([self.Y_obs_raw, y[None, :]])
 
         self.unchecked_mask[id] = False
         
@@ -179,12 +177,12 @@ class Selector(ABC):
 
         self.obs_ids.pop(idx)
 
-        if self.Y_obs.size == 0:
+        if self.Y_obs_raw.size == 0:
             raise RuntimeError("Inconsistent state: Y_obs is empty.")
-        elif self.Y_obs.shape[0] == 1:
-            self.Y_obs = np.empty((0, self.Y_obs.shape[1]))
+        elif self.Y_obs_raw.shape[0] == 1:
+            self.Y_obs_raw = np.empty((0, self.Y_obs_raw.shape[1]))
         else:
-            self.Y_obs = np.delete(self.Y_obs, idx, axis=0)
+            self.Y_obs_raw = np.delete(self.Y_obs_raw, idx, axis=0)
 
         self.unchecked_mask[id] = True
             
