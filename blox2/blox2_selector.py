@@ -12,8 +12,7 @@ class BLOX2Selector(Selector):
         self.compare_selection_time = compare_selection_time
         self.n_obs_samples = n_obs_samples
         self.n_chunks = n_chunks
-        if verbose:
-            self.candidate_id_history = []
+        
         if compare_selection_time:
             self.passed_times_blox2 = []
             self.passed_times_repli = []
@@ -72,9 +71,6 @@ class BLOX2Selector(Selector):
                 if scores[j] > best_score:
                     best_score = scores[j]
                     best_id = int(unobs_ids[s + j])
-        
-        if self.verbose:
-            self.candidate_id_history.append(best_id)
 
         if self.compare_selection_time:
             self.passed_times_blox2.append(time.perf_counter() - t0)

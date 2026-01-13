@@ -67,6 +67,7 @@ class Selector(ABC):
         
         self.verbose = verbose
         if verbose:
+            self.candidate_id_history = list(range(n_obs)) # contains ids of initial points
             self.passed_times_selection = []
             self.passed_times_train = []
             self.passed_times_pred = []
@@ -135,6 +136,7 @@ class Selector(ABC):
             cid = self.best_id(X_pred_cur, Y_obs)
             if self.verbose:
                 self.passed_times_selection.append(time.perf_counter() - t0)
+                self.candidate_id_history.append(cid)
 
             selected_ids.append(cid)
             temp_added_ids.append(cid)
@@ -205,3 +207,16 @@ class Selector(ABC):
         if self.y_scaler is None:
             return y_scaled
         return self.y_scaler.inverse_transform(y_scaled)
+    
+    def make_observation_history(self) -> np.ndarray:
+        if not hasattr(self, "candidate_id_history"):
+            raise AttributeError("candidate_id_history is not available (enable verbose).")
+
+        id_to_row = {int(cid): i for i, cid in enumerate(self.obs_ids)}
+        rows = []
+        for cid in self.candidate_id_history:
+            if cid not in id_to_row:
+                raise ValueError(f"cid={cid} is not currently observed, so Y cannot be reconstructed from current state.")
+            rows.append(self.Y_obs_raw[id_to_row[cid]])
+
+        return np.asarray(rows)
