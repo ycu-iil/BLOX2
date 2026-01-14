@@ -34,12 +34,13 @@ class Predictor(ABC):
         raise NotImplementedError
 
 class Selector(ABC):    
-    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, normalize_values: bool=True, verbose: bool=False):
+    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, normalize_values: bool=True):
         n_obs = len(observed_features)
         n_unobs = len(unobserved_features)
 
         if n_obs != len(observed_values):
             raise ValueError(f"observed_features ({n_obs}) and observed_values ({len(observed_values)}) must have same length.")
+        self.initial_n_obs = n_obs
         
         X_obs_raw = observed_features.to_numpy(dtype=float, copy=True)
         X_unobs_raw = unobserved_features.to_numpy(dtype=float, copy=True)
@@ -65,12 +66,10 @@ class Selector(ABC):
         
         self.predictor = predictor
         
-        self.verbose = verbose
-        if verbose:
-            self.candidate_id_history = list(range(n_obs)) # contains ids of initial points
-            self.passed_times_selection = []
-            self.passed_times_train = []
-            self.passed_times_pred = []
+        self.candidate_id_history = list(range(n_obs)) # contains ids of initial points
+        self.passed_times_selection = []
+        self.passed_times_train = []
+        self.passed_times_pred = []
 
     def best_id(self, X_pred: np.ndarray, Y_obs: np.ndarray) -> int:
         raise NotImplementedError
@@ -101,8 +100,7 @@ class Selector(ABC):
 
         t0 = time.perf_counter()
         self.predictor.fit(X_obs, Y_obs)
-        if self.verbose:
-            self.passed_times_train.append(time.perf_counter() - t0)
+        self.passed_times_train.append(time.perf_counter() - t0)
 
         unobs_ids0 = self.unobs_ids()
         X_unobs0 = self.X_unobs(unobs_ids0)
@@ -112,8 +110,7 @@ class Selector(ABC):
             X_pred0 = self.predictor.pred_samples(X_unobs0)
         else:
             X_pred0 = self.predictor.pred(X_unobs0)
-        if self.verbose:
-            self.passed_times_pred.append(time.perf_counter() - t0)
+        self.passed_times_pred.append(time.perf_counter() - t0)
 
         # cache predictions by id to rebuild X_pred in the current unobs_ids() order
         pred_by_id = {int(cid): X_pred0[i] for i, cid in enumerate(unobs_ids0)}
@@ -134,9 +131,9 @@ class Selector(ABC):
                 
             t0 = time.perf_counter()
             cid = self.best_id(X_pred_cur, Y_obs)
-            if self.verbose:
-                self.passed_times_selection.append(time.perf_counter() - t0)
-                self.candidate_id_history.append(cid)
+            
+            self.passed_times_selection.append(time.perf_counter() - t0)
+            self.candidate_id_history.append(cid)
 
             selected_ids.append(cid)
             temp_added_ids.append(cid)
@@ -209,9 +206,6 @@ class Selector(ABC):
         return self.y_scaler.inverse_transform(y_scaled)
     
     def make_observation_history(self) -> np.ndarray:
-        if not hasattr(self, "candidate_id_history"):
-            raise AttributeError("candidate_id_history is not available (enable verbose).")
-
         id_to_row = {int(cid): i for i, cid in enumerate(self.obs_ids)}
         rows = []
         for cid in self.candidate_id_history:
