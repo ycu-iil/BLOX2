@@ -70,6 +70,7 @@ class Selector(ABC):
         self.passed_times_selection = []
         self.passed_times_train = []
         self.passed_times_pred = []
+        self.passed_times_total = []
 
     def best_id(self, X_pred: np.ndarray, Y_obs: np.ndarray) -> int:
         raise NotImplementedError
@@ -82,6 +83,7 @@ class Selector(ABC):
         return self.next_candidates(n=1)[0]
     
     def next_candidates(self, n: int) -> list[int]:
+        total_t0 = time.perf_counter()
         if n <= 0:
             return []
 
@@ -149,6 +151,7 @@ class Selector(ABC):
         for cid in reversed(temp_added_ids):
             self.unobserve(cid)
 
+        self.passed_times_total.append(time.perf_counter() - total_t0)
         return selected_ids
 
     def observe(self, id: int, observed_values: np.ndarray):
