@@ -10,9 +10,18 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-import matplotlib.pyplot as plt
 import pandas as pd
 import yaml
+
+import matplotlib.pyplot as plt
+plt.rcParams.update({
+    "font.size": 16,
+    "axes.labelsize": 18,
+    "axes.titlesize": 18,
+    "xtick.labelsize": 16,
+    "ytick.labelsize": 16,
+    "legend.fontsize": 16,
+})
 
 from blox2 import calc_stein_discrepancy_trajectory, split_df_by_n_rows
 
@@ -127,7 +136,12 @@ def _plot_stein_discrepancy(out_dir: str, observation_history: np.ndarray, fixed
     plt.figure()
     plt.plot(x, y)
     plt.xscale("log", base=10)
-    plt.xticks([10, 100, 1000], [r"$10^1$", r"$10^2$", r"$10^3$"])
+    xmin, xmax = x.min(), x.max()
+    e_min = int(np.floor(np.log10(xmin)))
+    e_max = int(np.floor(np.log10(xmax)))
+    ticks = [10 ** e for e in range(e_min, e_max + 1)]
+    labels = [rf"$10^{e}$" for e in range(e_min, e_max + 1)]
+    plt.xticks(ticks, labels)
     plt.xlabel("Number of samplings")
     plt.ylabel("Stein discrepancy")
     plt.grid(True, axis="y")
