@@ -156,7 +156,7 @@ def _plot_scatter(out_dir: str, observation_history: np.ndarray, initial_n_obs: 
         if n <= 0:
             continue
 
-        end = n + initial_n_obs + 1
+        end = n + initial_n_obs
         if end > len(observation_history):
             continue
         data = observation_history[:end]
@@ -214,7 +214,7 @@ def run_experiment(config_path: str) -> str:
     fixed_data_for_scaler = np.vstack([observed_values.to_numpy(dtype=float, copy=False), unchecked_values.to_numpy(dtype=float, copy=False)])
 
     _write_time_consumption(out_dir, selector)
-    _plot_stein_discrepancy(out_dir=out_dir, observation_history=observation_history, fixed_data_for_scaler=fixed_data_for_scaler, squared_sigma=cfg.squared_sigma,initial_n_obs=selector.initial_n_obs)
+    _plot_stein_discrepancy(out_dir=out_dir, observation_history=observation_history, fixed_data_for_scaler=fixed_data_for_scaler, squared_sigma=cfg.squared_sigma, initial_n_obs=selector.initial_n_obs)
 
     # Scatter
     x_label = observed_values.columns[0] if len(observed_values.columns) > 0 else "obj0"
