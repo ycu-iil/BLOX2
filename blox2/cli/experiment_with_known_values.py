@@ -41,6 +41,7 @@ class ExperimentConfig:
     selector_args: dict[str, Any]
 
     report_interval: int
+    sd_plot_cutoff: int
     scatter_plot_intervals: list[int]
     output_dir: str = "results"
 
@@ -63,7 +64,8 @@ def _parse_config(d: dict[str, Any]) -> ExperimentConfig:
         predictor_args=dict(d.get("predictor_args", {}) or {}),
         selector_class=str(d["selector_class"]),
         selector_args=dict(d.get("selector_args", {}) or {}),
-        report_interval=int(report_interval),
+        report_interval=int(report_interval), 
+        sd_plot_cutoff=int(d.get("sd_plot_cutoff", 0)), 
         scatter_plot_intervals=list(d.get("scatter_plot_intervals", []) or []),
         output_dir=str(d.get("output_dir", "results")),
     )
@@ -124,27 +126,28 @@ def _write_time_consumption(out_dir: str, selector) -> None:
     ax.set_xlabel("Number of samplings")
     ax.set_ylabel("Time consumption (sec)")
     plt.tight_layout()
+    plt.grid()
     plt.savefig(os.path.join(out_dir, "time_consumption.png"))
     plt.close()
 
-def _plot_stein_discrepancy(out_dir: str, observation_history: np.ndarray, fixed_data_for_scaler: np.ndarray, squared_sigma: float, initial_n_obs: int):
+def _plot_stein_discrepancy(out_dir: str, observation_history: np.ndarray, fixed_data_for_scaler: np.ndarray, squared_sigma: float, initial_n_obs: int, cutoff: int=0):
     sd_trajectory = calc_stein_discrepancy_trajectory(observation_history, scale=fixed_data_for_scaler, squared_sigma=squared_sigma,)
 
-    y = sd_trajectory[initial_n_obs:]
-    x = np.arange(initial_n_obs, initial_n_obs + len(y))
+    y = sd_trajectory[initial_n_obs + cutoff:]
+    x = np.arange(cutoff + 1, cutoff + 1 + len(y))
 
     plt.figure()
     plt.plot(x, y)
     plt.xscale("log", base=10)
-    xmin, xmax = x.min(), x.max()
-    e_min = int(np.floor(np.log10(xmin)))
-    e_max = int(np.floor(np.log10(xmax)))
-    ticks = [10 ** e for e in range(e_min, e_max + 1)]
-    labels = [rf"$10^{e}$" for e in range(e_min, e_max + 1)]
-    plt.xticks(ticks, labels)
+    # xmin, xmax = x.min(), x.max()
+    # e_min = int(np.floor(np.log10(xmin)))
+    # e_max = int(np.floor(np.log10(xmax)))
+    # ticks = [10 ** e for e in range(e_min, e_max + 1)]
+    # labels = [rf"$10^{e}$" for e in range(e_min, e_max + 1)]
+    # plt.xticks(ticks, labels)
     plt.xlabel("Number of samplings")
     plt.ylabel("Stein discrepancy")
-    plt.grid(True, axis="y")
+    plt.grid()
     plt.tight_layout()
     plt.savefig(os.path.join(out_dir, f"stein_discrepancy_ss={squared_sigma}.png"))
     plt.close()
@@ -214,7 +217,7 @@ def run_experiment(config_path: str) -> str:
     fixed_data_for_scaler = np.vstack([observed_values.to_numpy(dtype=float, copy=False), unchecked_values.to_numpy(dtype=float, copy=False)])
 
     _write_time_consumption(out_dir, selector)
-    _plot_stein_discrepancy(out_dir=out_dir, observation_history=observation_history, fixed_data_for_scaler=fixed_data_for_scaler, squared_sigma=cfg.squared_sigma, initial_n_obs=selector.initial_n_obs)
+    _plot_stein_discrepancy(out_dir=out_dir, observation_history=observation_history, fixed_data_for_scaler=fixed_data_for_scaler, squared_sigma=cfg.squared_sigma, initial_n_obs=selector.initial_n_obs, cutoff=cfg.sd_plot_cutoff)
 
     # Scatter
     x_label = observed_values.columns[0] if len(observed_values.columns) > 0 else "obj0"
