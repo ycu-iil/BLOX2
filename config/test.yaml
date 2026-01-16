@@ -2,7 +2,7 @@ n_iters: 2000
 squared_sigma: 1
 n_suggestions: 1
 
-features_path: "data/zinc_dft/feature_list.csv"
+features_path: "data/zinc_dft/feature_list_mfp2048.csv"
 values_path: "data/zinc_dft/properties.csv"
 initial_n_obs: 10
 
