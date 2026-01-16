@@ -207,7 +207,7 @@ def run_experiment(config_path: str) -> str:
             selector.observe(cid, get_true_value(cid))
 
         if (i + 1) % cfg.report_interval == 0:
-            print(f"{i+1} candidates suggested. Passed time: {time.perf_counter() - t0:.3f} sec")
+            print(f"{i+1} candidates suggested. Passed time: {time.perf_counter() - t0:.3f} sec", flush=True)
 
     # Record results
     _write_candidate_history_csv(out_dir, selector)
