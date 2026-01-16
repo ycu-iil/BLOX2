@@ -2,14 +2,14 @@ n_iters: 2000
 squared_sigma: 1
 n_suggestions: 1
 
-features_path: "data/zinc_dft/feature_list_mfp2048.csv"
+features_path: "data/zinc_dft/feature_list_mfp1024.csv"
 values_path: "data/zinc_dft/properties.csv"
 initial_n_obs: 10
 
-predictor_class: RandomForestPredictor
+predictor_class: TabPFNPredictor
 predictor_args:
-  n_estimators: 100
-  random_state: 0
+  n_estimators: 1
+  token_path: data/hf_token.txt
 
 selector_class: BLOX2Selector
 selector_args:
@@ -18,6 +18,6 @@ selector_args:
   n_chunks: 512
   use_distribution: false
 
-report_interval: 50
+report_interval: 1
 scatter_plot_intervals: [200, 500, 2000, 5000, 20000, 50000]
 output_dir: "results"

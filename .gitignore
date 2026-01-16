@@ -1,4 +1,6 @@
 .DS_Store
 __pycache__
-data/zinc_dft/feature_list.csv
+feature_list_mfp1024.csv
+feature_list_mfp2048.csv
 results/
+hf_token.txt
