@@ -1,5 +1,5 @@
-n_iters: 100
-squared_sigma: 1
+n_iters: 2000
+squared_sigma: 0.04
 n_suggestions: 1
 
 features_path: "data/zinc_dft/feature_list_mfp1024.csv"
@@ -10,6 +10,9 @@ predictor_class: TabPFNPredictor
 predictor_args:
   n_estimators: 1
   token_path: data/hf_token.txt
+  device:
+    - cuda:0
+    - cuda:1
 
 selector_class: BLOX2Selector
 selector_args:

@@ -1,5 +1,5 @@
 n_iters: 2000
-squared_sigma: 1
+squared_sigma: 0.04
 n_suggestions: 1
 
 features_path: "data/zinc_dft/feature_list_mfp2048.csv"
