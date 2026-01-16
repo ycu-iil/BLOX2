@@ -7,7 +7,7 @@ from tabpfn import TabPFNRegressor
 from blox2 import Predictor
 
 class TabPFNPredictor(Predictor):
-    def __init__(self, token_path: str, n_estimators: int=4, device: str="auto", n_jobs: int= None):
+    def __init__(self, token_path: str, n_estimators: int=4, device: str | list[str]="auto", n_jobs: int= None):
         self.token_path = token_path
         self.n_estimators = n_estimators
         self.device = device
@@ -49,7 +49,10 @@ class TabPFNPredictor(Predictor):
             self._models = []
             for j in range(d_obj):
                 yj = np.asarray(Y[:, j], float)
-                m = TabPFNRegressor(device=self.device, n_estimators=self.n_estimators, n_jobs=self.n_jobs)
+                if type(self.device) == list:
+                    m = TabPFNRegressor(device=self.device[j], n_estimators=self.n_estimators, n_jobs=self.n_jobs)
+                else:
+                    m = TabPFNRegressor(device=self.device, n_estimators=self.n_estimators, n_jobs=self.n_jobs)
                 m.fit(X, yj)
                 self._models.append(m)
         else:
