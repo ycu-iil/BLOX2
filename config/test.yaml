@@ -6,12 +6,12 @@ features_path: "data/zinc_dft/feature_list.csv"
 values_path: "data/zinc_dft/properties.csv"
 initial_n_obs: 10
 
+selector_class: RandomSelector
+
+# dummy
 predictor_class: RandomForestPredictor
 predictor_args:
-  n_estimators: 100
-  random_state: 0
-
-selector_class: RandomSelector
+  n_estimators: 1
 
 report_interval: 50
 scatter_plot_intervals: [200, 500, 2000, 5000, 20000, 50000]
