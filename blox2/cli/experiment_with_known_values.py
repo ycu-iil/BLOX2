@@ -2,11 +2,11 @@
 
 import argparse
 import csv
+from dataclasses import dataclass
 import datetime as _dt
 import os
 import shutil
 import time
-from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
@@ -23,7 +23,7 @@ plt.rcParams.update({
     "legend.fontsize": 16,
 })
 
-from blox2 import calc_stein_discrepancy_trajectory, split_df_by_n_rows
+from blox2 import calc_stein_discrepancy_trajectory, split_df_by_n_rows, load_features
 
 @dataclass(frozen=True)
 class ExperimentConfig:
@@ -72,7 +72,6 @@ def _parse_config(d: dict[str, Any]) -> ExperimentConfig:
     return cfg
 
 def _resolve_predictor(class_name: str):
-    
     import blox2.predictor as predictor_mod
 
     if not hasattr(predictor_mod, class_name):
@@ -85,7 +84,6 @@ def _resolve_selector(class_name: str):
     if not hasattr(blox2_mod, class_name):
         raise ValueError(f"Selector class '{class_name}' not found in blox2.")
     return getattr(blox2_mod, class_name)
-
 
 def _make_output_dir(output_dir: str) -> str:
     ts = _dt.datetime.now().strftime("%m-%d_%H%M%S")
@@ -182,7 +180,8 @@ def run_experiment(config_path: str) -> str:
     _copy_config(config_path, out_dir)
 
     # Load data
-    features_df = pd.read_csv(cfg.features_path, header=None)
+    print("Loading data...")
+    features_df = load_features(cfg.features_path)
     values_df = pd.read_csv(cfg.values_path)
 
     observed_features, unchecked_features = split_df_by_n_rows(features_df, cfg.initial_n_obs)
@@ -192,6 +191,7 @@ def run_experiment(config_path: str) -> str:
         return np.asarray(unchecked_values.iloc[idx - len(observed_features)])
 
     # Initialization
+    print("Initializing the selector...")
     predictor_class = _resolve_predictor(cfg.predictor_class)
     predictor = predictor_class(**cfg.predictor_args)
 
@@ -203,6 +203,7 @@ def run_experiment(config_path: str) -> str:
     selector = selector_class(observed_features, observed_values, unchecked_features, predictor, sigma=cfg.sigma, verbose_plot_dir=verbose_plot_dir, **cfg.selector_args)
 
     # Main loop
+    print("Starting the main loop.")
     t0 = time.perf_counter()
     n_total = min(cfg.n_iters, len(unchecked_features))
     for i in range(n_total):

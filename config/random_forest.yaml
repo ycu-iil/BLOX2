@@ -2,13 +2,13 @@ n_iters: 100
 sigma: 1
 n_suggestions: 1
 
-features_path: "data/zinc_dft/feature_list_mfp2048.csv"
+features_path: "data/zinc_dft/feature_list_mfp2048_rdd.npz"
 values_path: "data/zinc_dft/properties.csv"
 initial_n_obs: 10
 
 predictor_class: RandomForestPredictor
 predictor_args:
-  n_estimators: 10
+  n_estimators: 100
   random_state: 0
 
 selector_class: BLOX2Selector

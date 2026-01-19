@@ -1,3 +1,4 @@
+from pathlib import Path
 import numpy as np
 import pandas as pd
 
@@ -22,3 +23,29 @@ def split_df_by_n_rows(df: pd.DataFrame, n: int) -> tuple[pd.DataFrame, pd.DataF
     df_head = df.iloc[:n].copy()
     df_tail = df.iloc[n:].copy()
     return df_head, df_tail
+
+def load_features(path: str, header=None) -> pd.DataFrame:
+    path = Path(path)
+    suffix = path.suffix.lower()
+
+    if suffix == ".csv":
+        return pd.read_csv(path, header=header).to_numpy()
+
+    elif suffix == ".npz":
+        z = np.load(path, allow_pickle=True)
+
+        # needs to be "features_1", "features_2", ...
+        feature_keys = sorted(
+            [k for k in z.files if k.startswith("features_")],
+            key=lambda s: int(s.split("_")[1]),
+        )
+        
+        if not feature_keys:
+            raise ValueError("NPZ has no features_* arrays.")
+        
+        feats = [z[k] for k in feature_keys]
+
+        X = np.hstack(feats)
+        return pd.DataFrame(X)
+    else:
+        raise ValueError(f"Unsupported feature format: {suffix}")
