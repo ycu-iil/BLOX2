@@ -88,7 +88,7 @@ def _resolve_selector(class_name: str):
 
 
 def _make_output_dir(output_dir: str) -> str:
-    ts = _dt.datetime.now().strftime("%m-%d_%H-%M")
+    ts = _dt.datetime.now().strftime("%m-%d_%H%M%S")
     out_dir = os.path.join(output_dir, ts)
     scatter_out_dir = os.path.join(out_dir, "scatter")
     os.makedirs(out_dir, exist_ok=True)

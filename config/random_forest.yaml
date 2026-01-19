@@ -1,4 +1,4 @@
-n_iters: 20
+n_iters: 100
 sigma: 1
 n_suggestions: 1
 
@@ -8,7 +8,7 @@ initial_n_obs: 10
 
 predictor_class: RandomForestPredictor
 predictor_args:
-  n_estimators: 100
+  n_estimators: 10
   random_state: 0
 
 selector_class: BLOX2Selector
