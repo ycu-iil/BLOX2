@@ -90,7 +90,9 @@ def _resolve_selector(class_name: str):
 def _make_output_dir(output_dir: str) -> str:
     ts = _dt.datetime.now().strftime("%m-%d_%H-%M")
     out_dir = os.path.join(output_dir, ts)
+    scatter_out_dir = os.path.join(out_dir, "scatter")
     os.makedirs(out_dir, exist_ok=True)
+    os.makedirs(scatter_out_dir, exist_ok=True)
     return out_dir
 
 def _copy_config(config_path: str, out_dir: str) -> None:
@@ -171,7 +173,7 @@ def _plot_scatter(out_dir: str, observation_history: np.ndarray, initial_n_obs: 
         plt.title(f"Number of sampling: {n}")
         plt.grid(True)
         plt.tight_layout()
-        plt.savefig(os.path.join(out_dir, f"scatter_{n}.png"))
+        plt.savefig(os.path.join(out_dir, "scatter", f"scatter_{n}.png"))
         plt.close()
 
 def run_experiment(config_path: str) -> str:
