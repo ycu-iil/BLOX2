@@ -34,7 +34,7 @@ class Predictor(ABC):
         raise NotImplementedError
 
 class Selector(ABC):    
-    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, squared_sigma: float=1.0, normalize_features: bool=True, value_normalization: str="after_pred"):
+    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, sigma: float=1.0, normalize_features: bool=True, value_normalization: str="after_pred"):
         n_obs = len(observed_features)
         n_unobs = len(unobserved_features)
 
@@ -65,7 +65,8 @@ class Selector(ABC):
         self.unchecked_mask[:n_obs] = False
         
         self.predictor = predictor
-        self.squared_sigma = squared_sigma
+        self.sigma = sigma
+        self.squared_sigma = sigma ** 2
         
         self.candidate_id_history = list(range(n_obs)) # contains ids of initial points
         self.passed_times_selection = []

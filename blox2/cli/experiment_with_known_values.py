@@ -28,7 +28,7 @@ from blox2 import calc_stein_discrepancy_trajectory, split_df_by_n_rows
 @dataclass(frozen=True)
 class ExperimentConfig:
     n_iters: int
-    squared_sigma: float
+    sigma: float
     n_suggestions: int
 
     features_path: str
@@ -55,7 +55,7 @@ def _parse_config(d: dict[str, Any]) -> ExperimentConfig:
     
     cfg = ExperimentConfig(
         n_iters=int(d["n_iters"]),
-        squared_sigma=float(d["squared_sigma"]),
+        sigma=float(d["sigma"]),
         n_suggestions=int(d.get("n_suggestions", 1)),
         features_path=str(d["features_path"]),
         values_path=str(d["values_path"]),
@@ -132,8 +132,8 @@ def _write_time_consumption(out_dir: str, selector) -> None:
     plt.savefig(os.path.join(out_dir, "time_consumption.png"))
     plt.close()
 
-def _plot_stein_discrepancy(out_dir: str, observation_history: np.ndarray, fixed_data_for_scaler: np.ndarray, squared_sigma: float, initial_n_obs: int, cutoff: int=0):
-    sd_trajectory = calc_stein_discrepancy_trajectory(observation_history, scale=fixed_data_for_scaler, squared_sigma=squared_sigma,)
+def _plot_stein_discrepancy(out_dir: str, observation_history: np.ndarray, fixed_data_for_scaler: np.ndarray, sigma: float, initial_n_obs: int, cutoff: int=0):
+    sd_trajectory = calc_stein_discrepancy_trajectory(observation_history, scale=fixed_data_for_scaler, sigma=sigma,)
 
     y = sd_trajectory[initial_n_obs + cutoff:]
     x = np.arange(cutoff + 1, cutoff + 1 + len(y))
@@ -151,10 +151,10 @@ def _plot_stein_discrepancy(out_dir: str, observation_history: np.ndarray, fixed
     plt.ylabel("Stein discrepancy")
     plt.grid()
     plt.tight_layout()
-    plt.savefig(os.path.join(out_dir, f"stein_discrepancy_ss={squared_sigma}.png"))
+    plt.savefig(os.path.join(out_dir, f"stein_discrepancy_s={sigma}.png"))
     plt.close()
 
-    np.savetxt(os.path.join(out_dir, f"stein_discrepancy_histories_ss={squared_sigma}.csv"), sd_trajectory[initial_n_obs:], delimiter=",",)
+    np.savetxt(os.path.join(out_dir, f"stein_discrepancy_histories_s={sigma}.csv"), sd_trajectory[initial_n_obs:], delimiter=",",)
 
 def _plot_scatter(out_dir: str, observation_history: np.ndarray, initial_n_obs: int, intervals: list[int], x_label: str, y_label: str):
     for n in intervals:
@@ -198,7 +198,7 @@ def run_experiment(config_path: str) -> str:
     predictor = predictor_class(**cfg.predictor_args)
 
     selector_class = _resolve_selector(cfg.selector_class)
-    selector = selector_class(observed_features, observed_values, unchecked_features, predictor, squared_sigma=cfg.squared_sigma, **cfg.selector_args)
+    selector = selector_class(observed_features, observed_values, unchecked_features, predictor, sigma=cfg.sigma, **cfg.selector_args)
 
     # Main loop
     t0 = time.perf_counter()
@@ -219,7 +219,7 @@ def run_experiment(config_path: str) -> str:
     fixed_data_for_scaler = np.vstack([observed_values.to_numpy(dtype=float, copy=False), unchecked_values.to_numpy(dtype=float, copy=False)])
 
     _write_time_consumption(out_dir, selector)
-    _plot_stein_discrepancy(out_dir=out_dir, observation_history=observation_history, fixed_data_for_scaler=fixed_data_for_scaler, squared_sigma=cfg.squared_sigma, initial_n_obs=selector.initial_n_obs, cutoff=cfg.sd_plot_cutoff)
+    _plot_stein_discrepancy(out_dir=out_dir, observation_history=observation_history, fixed_data_for_scaler=fixed_data_for_scaler, sigma=cfg.sigma, initial_n_obs=selector.initial_n_obs, cutoff=cfg.sd_plot_cutoff)
 
     # Scatter
     x_label = observed_values.columns[0] if len(observed_values.columns) > 0 else "obj0"

@@ -5,12 +5,12 @@ from .base import Selector, Predictor
 from .utils import stein_novelty_repli
 
 class BLOX2Selector(Selector):
-    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, value_normalization: str="after_pred", squared_sigma: float=1, n_obs_samples: int=None, n_chunks: int=256, use_distribution: bool=False, compare_selection_time=False):
+    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, value_normalization: str="after_pred", sigma: float=1.0, n_obs_samples: int=None, n_chunks: int=256, use_distribution: bool=False, compare_selection_time=False):
         """
         Args:
             n_obs_samples: When the number of observed points are greater than this value, samples n_obs_samples points for Stein novelty calculation instead of using all of the observed points.
         """
-        super().__init__(observed_features, observed_values, unobserved_features, predictor, squared_sigma=squared_sigma, normalize_features=normalize_features, value_normalization=value_normalization)
+        super().__init__(observed_features, observed_values, unobserved_features, predictor, sigma=sigma, normalize_features=normalize_features, value_normalization=value_normalization)
         self._use_distribution = use_distribution
         self.compare_selection_time = compare_selection_time
         self.n_obs_samples = n_obs_samples

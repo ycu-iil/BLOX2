@@ -1,7 +1,7 @@
 import numpy as np
 from sklearn.preprocessing import StandardScaler
 
-def calc_stein_discrepancy_trajectory(observation_history: np.ndarray, scale: np.ndarray | StandardScaler, squared_sigma: float, copy: bool=True) -> np.ndarray:
+def calc_stein_discrepancy_trajectory(observation_history: np.ndarray, scale: np.ndarray | StandardScaler, sigma: float, copy: bool=True) -> np.ndarray:
     """
     Compute the trajectory of the estimate of Stein discrepancy under a Gaussian kernel with a fixed scaler.
 
@@ -9,12 +9,16 @@ def calc_stein_discrepancy_trajectory(observation_history: np.ndarray, scale: np
         observe_history : Observation history as an array of shape (n_steps, d).
         scale : Either a fitted sklearn.preprocessing.StandardScaler, or an array
                 of shape (n_scale, d) used to fit a fixed StandardScaler.
-        squared_sigma : Gaussian kernel bandwidth^2.
+        sigma : Gaussian kernel bandwidth.
         copy : If True, copy input arrays when casting.
 
     Returns:
         (n_steps,) array, with NaN for n<2.
     """
+    if not (np.isfinite(sigma) and sigma > 0):
+        raise ValueError(f"sigma must be a positive finite float; got {sigma}")
+    
+    sigma2 = sigma**2
     
     Y_hist = np.asarray(observation_history)
     if Y_hist.ndim != 2:
@@ -24,13 +28,9 @@ def calc_stein_discrepancy_trajectory(observation_history: np.ndarray, scale: np
     if n_steps == 0:
         return np.empty((0,))
 
-    if not (np.isfinite(squared_sigma) and squared_sigma > 0):
-        raise ValueError(f"squared_sigma must be a positive finite float; got {squared_sigma}")
-
     scaler = _make_scaler(scale, d)
     Y = scaler.transform(Y_hist.copy() if copy else Y_hist)
 
-    sigma2 = squared_sigma
     inv_sigma2 = 1.0 / sigma2
     inv_sigma4 = inv_sigma2 * inv_sigma2
 

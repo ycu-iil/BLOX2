@@ -1,5 +1,5 @@
-n_iters: 2000
-squared_sigma: 1
+n_iters: 5
+sigma: 1
 n_suggestions: 1
 
 features_path: "data/zinc_dft/feature_list_mfp2048.csv"
@@ -19,5 +19,5 @@ selector_args:
   use_distribution: false
 
 report_interval: 10
-scatter_plot_intervals: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 30, 40, 50, 75, 100, 200, 500, 2000, 5000, 20000, 50000]
+scatter_plot_intervals: [2, 5, 20, 50, 200, 500, 2000, 5000, 20000, 50000]
 output_dir: "results"
