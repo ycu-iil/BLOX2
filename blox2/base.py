@@ -120,6 +120,7 @@ class Selector(ABC):
         else:
             Y_pred0 = self.predictor.pred(X_unobs0)
         self.passed_times_pred.append(time.perf_counter() - t0)
+        Y_pred0_raw = Y_pred0
         
         if self.value_normalization == "after_pred":
             self.y_scaler = StandardScaler()
@@ -140,16 +141,17 @@ class Selector(ABC):
 
         # cache predictions by id to rebuild X_pred in the current unobs_ids() order
         pred_by_id = {int(cid): Y_pred0[i] for i, cid in enumerate(unobs_ids0)}
+        pred_raw_by_id = {int(cid): Y_pred0_raw[i] for i, cid in enumerate(unobs_ids0)}
 
         selected_ids = []
         temp_added_ids = []
+        selection_time = 0
         
         for _ in range(min(n, int(unobs_ids0.size))):
             cur_unobs_ids = self.unobs_ids()
             if cur_unobs_ids.size == 0:
                 break
 
-            # X_pred_cur = np.vstack([pred_by_id[int(cid)] for cid in cur_unobs_ids])
             if self.use_distribution():
                 X_pred_cur = np.stack([pred_by_id[int(cid)] for cid in cur_unobs_ids], axis=0)
             else:
@@ -157,19 +159,24 @@ class Selector(ABC):
                 
             t0 = time.perf_counter()
             cid = self.best_id(X_pred_cur, Y_obs)
-            
-            self.passed_times_selection.append(time.perf_counter() - t0)
+            selection_time += time.perf_counter() - t0
             self.candidate_id_history.append(cid)
 
             selected_ids.append(cid)
             temp_added_ids.append(cid)
 
-            # virtual observation
+            # virtual observation                
             if self.use_distribution():
-                y_virtual = np.mean(pred_by_id[cid], axis=0)
-                self.observe(cid, y_virtual)
+                y_virtual_for_obs = np.mean(pred_raw_by_id[cid], axis=0)
             else:
-                self.observe(cid, pred_by_id[cid])
+                y_virtual_for_obs = pred_raw_by_id[cid]
+                
+            if self.value_normalization == "before_pred": #invert scaling
+                y_virtual_for_obs = self.y_scaler.inverse_transform(y_virtual_for_obs.reshape(1, -1))[0]
+
+            self.observe(cid, y_virtual_for_obs)
+            
+        self.passed_times_selection.append(selection_time)
 
         # revert virtual observation
         for cid in reversed(temp_added_ids):
