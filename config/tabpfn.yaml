@@ -14,7 +14,7 @@ predictor_args:
 selector_class: BLOX2Selector
 selector_args:
   normalize_features: false
-  value_normalization: after_pred
+  value_normalization: before_pred
   n_chunks: 512
   use_distribution: false
 

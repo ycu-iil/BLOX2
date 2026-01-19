@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
+import os
 import time
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
@@ -34,7 +36,7 @@ class Predictor(ABC):
         raise NotImplementedError
 
 class Selector(ABC):    
-    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, sigma: float=1.0, normalize_features: bool=True, value_normalization: str="after_pred"):
+    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, sigma: float=1.0, normalize_features: bool=True, value_normalization: str="before_pred", verbose_plot_dir: str=None):
         n_obs = len(observed_features)
         n_unobs = len(unobserved_features)
 
@@ -68,6 +70,9 @@ class Selector(ABC):
         self.sigma = sigma
         self.squared_sigma = sigma ** 2
         
+        self.verbose_plot_dir = verbose_plot_dir
+        if self.verbose_plot_dir is not None:
+            os.makedirs(self.verbose_plot_dir, exist_ok=True)
         self.candidate_id_history = list(range(n_obs)) # contains ids of initial points
         self.passed_times_selection = []
         self.passed_times_train = []
@@ -116,7 +121,7 @@ class Selector(ABC):
             Y_pred0 = self.predictor.pred(X_unobs0)
         self.passed_times_pred.append(time.perf_counter() - t0)
         
-        if self.value_normalization in ("default", "after_pred"):
+        if self.value_normalization == "after_pred":
             self.y_scaler = StandardScaler()
             if self.use_distribution():
                 m, s, d = Y_pred0.shape
@@ -171,6 +176,46 @@ class Selector(ABC):
             self.unobserve(cid)
 
         self.passed_times_total.append(time.perf_counter() - total_t0)
+        
+        if self.verbose_plot_dir is not None:
+            try:
+                if self.y_scaler is not None:
+                    Y_obs_plot = self.y_scaler.inverse_transform(np.asarray(Y_obs))
+                else:
+                    Y_obs_plot = np.asarray(Y_obs)
+                    
+                if Y_obs_plot.ndim == 2 and Y_obs_plot.shape[1] == 2:
+                    if self.use_distribution():
+                        Yp = np.mean(np.asarray(Y_pred0), axis=1)
+                    else:
+                        Yp = np.asarray(Y_pred0)
+                        
+                    if self.y_scaler is not None:
+                        Y_pred_plot = self.y_scaler.inverse_transform(Yp)
+                    else:
+                        Y_pred_plot = Yp
+
+                    selected_set = set(int(x) for x in selected_ids)
+                    sel_idx = [i for i, cid in enumerate(unobs_ids0) if int(cid) in selected_set]
+                    Y_sel_plot = Y_pred_plot[sel_idx] if len(sel_idx) > 0 else np.empty((0, 2))
+
+                    plt.figure()
+                    plt.scatter(Y_pred_plot[:, 0], Y_pred_plot[:, 1], c="C1", s=10, alpha=0.6, label="Predicted")
+                    plt.scatter(Y_obs_plot[:, 0], Y_obs_plot[:, 1], c="C0", s=30, alpha=0.8, label="Observed")
+                    if Y_sel_plot.size > 0:
+                        plt.scatter(Y_sel_plot[:, 0], Y_sel_plot[:, 1], c="C2", s=80, alpha=0.9, label="Selected")
+
+                    plt.xlabel("objective 1")
+                    plt.ylabel("objective 2")
+                    plt.legend()
+                    plt.tight_layout()
+                    step = len(self.passed_times_total)
+                    out_path = os.path.join(self.verbose_plot_dir, f"scatter_{step}.png")
+                    plt.savefig(out_path, dpi=200)
+                    plt.close()
+            except Exception:
+                pass
+            
         return selected_ids
 
     def observe(self, id: int, observed_values: np.ndarray):

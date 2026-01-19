@@ -43,6 +43,7 @@ class ExperimentConfig:
     report_interval: int
     sd_plot_cutoff: int
     scatter_plot_intervals: list[int]
+    verbose_plot: bool
     output_dir: str = "results"
 
 def _load_yaml(path: str) -> dict[str, Any]:
@@ -50,9 +51,7 @@ def _load_yaml(path: str) -> dict[str, Any]:
         data = yaml.safe_load(f)
     return data
 
-def _parse_config(d: dict[str, Any]) -> ExperimentConfig:
-    report_interval = d.get("report_interval", 100)
-    
+def _parse_config(d: dict[str, Any]) -> ExperimentConfig:    
     cfg = ExperimentConfig(
         n_iters=int(d["n_iters"]),
         sigma=float(d["sigma"]),
@@ -64,8 +63,9 @@ def _parse_config(d: dict[str, Any]) -> ExperimentConfig:
         predictor_args=dict(d.get("predictor_args", {}) or {}),
         selector_class=str(d["selector_class"]),
         selector_args=dict(d.get("selector_args", {}) or {}),
-        report_interval=int(report_interval), 
+        report_interval=int(d.get("report_interval", 100)), 
         sd_plot_cutoff=int(d.get("sd_plot_cutoff", 0)), 
+        verbose_plot=bool(d.get("verbose_plot", False)),
         scatter_plot_intervals=list(d.get("scatter_plot_intervals", []) or []),
         output_dir=str(d.get("output_dir", "results")),
     )
@@ -113,8 +113,6 @@ def _write_observation_csvs(out_dir: str, selector) -> np.ndarray:
     return observation_history
 
 def _write_time_consumption(out_dir: str, selector) -> None:
-    cols = ["passed_times_selection", "passed_times_train", "passed_times_pred", "passed_times_total"]
-
     df = pd.DataFrame({
         "Selection": selector.passed_times_selection,
         "Train": selector.passed_times_train,
@@ -198,7 +196,11 @@ def run_experiment(config_path: str) -> str:
     predictor = predictor_class(**cfg.predictor_args)
 
     selector_class = _resolve_selector(cfg.selector_class)
-    selector = selector_class(observed_features, observed_values, unchecked_features, predictor, sigma=cfg.sigma, **cfg.selector_args)
+    if cfg.verbose_plot:
+        verbose_plot_dir = os.path.join(out_dir, "verbose_plots")
+    else:
+        verbose_plot_dir = None
+    selector = selector_class(observed_features, observed_values, unchecked_features, predictor, sigma=cfg.sigma, verbose_plot_dir=verbose_plot_dir, **cfg.selector_args)
 
     # Main loop
     t0 = time.perf_counter()

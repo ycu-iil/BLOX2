@@ -1,4 +1,4 @@
-n_iters: 5
+n_iters: 20
 sigma: 1
 n_suggestions: 1
 
@@ -14,10 +14,11 @@ predictor_args:
 selector_class: BLOX2Selector
 selector_args:
   normalize_features: false
-  value_normalization: after_pred
+  value_normalization: before_pred
   n_chunks: 512
   use_distribution: false
 
-report_interval: 10
+report_interval: 1
 scatter_plot_intervals: [2, 5, 20, 50, 200, 500, 2000, 5000, 20000, 50000]
+verbose_plot: true
 output_dir: "results"
