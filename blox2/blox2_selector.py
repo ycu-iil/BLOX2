@@ -5,7 +5,7 @@ from .base import Selector, Predictor
 from .utils import stein_novelty_repli
 
 class BLOX2Selector(Selector):
-    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, value_normalization: str="before_pred", sigma: float=1.0, n_obs_samples: int=None, n_chunks: int=256, use_distribution: bool=False, compare_selection_time=False, verbose_plot_dir: str=None):
+    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, value_normalization: str="before_pred", sigma: float=1.0, n_obs_samples: int=None, n_chunks: int=256, use_distribution: bool=False, pooling: str="mean", compare_selection_time=False, verbose_plot_dir: str=None):
         """
         Args:
             value_normalization: Specifiy how to normalize the property values. "before_pred" (only use observed points, normalize before prediction) / "after_pred" (use observed points and predicted points) / "disable"
@@ -16,6 +16,7 @@ class BLOX2Selector(Selector):
         self.compare_selection_time = compare_selection_time
         self.n_obs_samples = n_obs_samples
         self.n_chunks = n_chunks
+        self.pooling = pooling
         
         if compare_selection_time:
             self.passed_times_blox2 = []
@@ -40,22 +41,30 @@ class BLOX2Selector(Selector):
 
         best_id = -1
         best_score = -np.inf
-
+        
         if self.use_distribution(): # X_pred: (n_unobs, n_samples, d)
             for s in range(0, len(unobs_ids), self.n_chunks):
                 e = min(s + self.n_chunks, len(unobs_ids))
 
                 Xc = X_pred[s:e] # (c, n_samples, d)
-                scores = np.zeros(e - s)
+                n_samples = Xc.shape[1]
+                c = e - s
 
-                for k in range(Xc.shape[1]):
+                scores_per_sample = np.zeros((n_samples, c)) # (n_samples, c)
+
+                for k in range(n_samples):
                     x = Xc[:, k, :] # (c, d)
                     diff = Y[None, :, :] - x[:, None, :] # (c, n_obs, d)
                     dist = np.sum(diff * diff, axis=2) # (c, n_obs)
 
-                    scores += np.sum((dist - d * sigma2) * np.exp(-dist / (2 * sigma2)), axis=1)
+                    scores_per_sample[k] = np.sum((dist - d * sigma2) * np.exp(-dist / (2 * sigma2)), axis=1)
 
-                scores /= Xc.shape[1] # mean over samples
+                if self.pooling == "mean":
+                    scores = scores_per_sample.mean(axis=0) # (c,)
+                elif self.pooling == "max":
+                    scores = scores_per_sample.max(axis=0) # (c,)
+                else:
+                    raise ValueError(f"Unknown pooling_type: {self.pooling}")
 
                 j = np.argmax(scores)
                 if scores[j] > best_score:

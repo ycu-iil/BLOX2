@@ -8,7 +8,7 @@ initial_n_obs: 10
 
 predictor_class: RandomForestPredictor
 predictor_args:
-  n_estimators: 100
+  n_estimators: 10
   random_state: 0
 
 selector_class: BLOX2Selector
@@ -16,7 +16,8 @@ selector_args:
   normalize_features: false
   value_normalization: before_pred
   n_chunks: 512
-  use_distribution: false
+  use_distribution: true
+  pooling: "max"
 
 report_interval: 1
 scatter_plot_intervals: [2, 5, 20, 50, 200, 500, 2000, 5000, 20000, 50000]
