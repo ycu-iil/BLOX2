@@ -13,9 +13,9 @@ class DummyPredictor(Predictor):
         return np.full((m, self.d_obj), 0.0, dtype=float)
     
 class RandomSelector(Selector):
-    def __init__(self, observed_features, observed_values, unobserved_features, predictor=None, squared_sigma: float=1.0, normalize_features: bool=False, normalize_values: bool=False):
+    def __init__(self, observed_features, observed_values, unobserved_features, predictor=None, squared_sigma: float=1.0, normalize_features: bool=False, value_normalization: str=None):
         # dummy args for easier YAML implementation TODO: clean this up?
-        super().__init__(observed_features, observed_values, unobserved_features, DummyPredictor(), False, False)
+        super().__init__(observed_features, observed_values, unobserved_features, DummyPredictor(), False, None)
         
     def next_candidates(self, n: int) -> list[int]:
         total_t0 = time.perf_counter()

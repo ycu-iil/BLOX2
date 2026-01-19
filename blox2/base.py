@@ -34,7 +34,7 @@ class Predictor(ABC):
         raise NotImplementedError
 
 class Selector(ABC):    
-    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, squared_sigma: float=1.0, normalize_features: bool=True, normalize_values: bool=True):
+    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, squared_sigma: float=1.0, normalize_features: bool=True, value_normalization: str="after_pred"):
         n_obs = len(observed_features)
         n_unobs = len(unobserved_features)
 
@@ -55,7 +55,7 @@ class Selector(ABC):
         else:
             X_obs, X_unobs = X_obs_raw, X_unobs_raw
 
-        self.normalize_values = normalize_values
+        self.value_normalization = value_normalization
         self.y_scaler = None
         
         self.X_all: np.ndarray = np.vstack([X_obs, X_unobs])
@@ -94,7 +94,7 @@ class Selector(ABC):
 
         X_obs = self.X_obs()
         
-        if self.normalize_values:
+        if self.value_normalization == "before_pred":
             self.y_scaler = StandardScaler()
             self.y_scaler.fit(self.Y_obs_raw)
             Y_obs = self.y_scaler.transform(self.Y_obs_raw)
@@ -110,13 +110,30 @@ class Selector(ABC):
         
         t0 = time.perf_counter()
         if self.use_distribution():
-            X_pred0 = self.predictor.pred_samples(X_unobs0)
+            Y_pred0 = self.predictor.pred_samples(X_unobs0)
         else:
-            X_pred0 = self.predictor.pred(X_unobs0)
+            Y_pred0 = self.predictor.pred(X_unobs0)
         self.passed_times_pred.append(time.perf_counter() - t0)
+        
+        if self.value_normalization in ("default", "after_pred"):
+            self.y_scaler = StandardScaler()
+            if self.use_distribution():
+                m, s, d = Y_pred0.shape
+                Y_pred_2d = Y_pred0.reshape(m * s, d)
+                Y_all = np.vstack([self.Y_obs_raw, Y_pred_2d])
+                self.y_scaler.fit(Y_all)
+                Y_obs = self.y_scaler.transform(self.Y_obs_raw)
+                Y_pred0 = self.y_scaler.transform(Y_pred_2d).reshape(m, s, d)
+            else:
+                Y_all = np.vstack([self.Y_obs_raw, Y_pred0])
+                self.y_scaler.fit(Y_all)
+                Y_obs = self.y_scaler.transform(self.Y_obs_raw)
+                Y_pred0 = self.y_scaler.transform(Y_pred0)
+        else:
+            pass
 
         # cache predictions by id to rebuild X_pred in the current unobs_ids() order
-        pred_by_id = {int(cid): X_pred0[i] for i, cid in enumerate(unobs_ids0)}
+        pred_by_id = {int(cid): Y_pred0[i] for i, cid in enumerate(unobs_ids0)}
 
         selected_ids = []
         temp_added_ids = []
