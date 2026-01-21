@@ -42,6 +42,7 @@ class BLOX2Selector(Selector):
         if self.n_obs_samples is not None and self.n_obs_samples > 0 and self.n_obs_samples < n:
             idx = np.random.choice(n, self.n_obs_samples, replace=False)
             Y = Y_full[idx]
+            Y = np.asfortranarray(Y) # note: inserting this prevented selection time bloat
         else:
             Y = Y_full
 
@@ -90,6 +91,8 @@ class BLOX2Selector(Selector):
                 if scores[j] > best_score:
                     best_score = scores[j]
                     best_id = int(unobs_ids[s + j])
+                    
+        # print("n_full=", Y_full.shape[0], "Y=", Y.shape, "dtype", Y.dtype, "C", Y.flags['C_CONTIGUOUS'], "F", Y.flags['F_CONTIGUOUS'])
 
         if self.compare_selection_time:
             self.passed_times_blox2.append(time.perf_counter() - t0)

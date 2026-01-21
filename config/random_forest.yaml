@@ -18,8 +18,9 @@ selector_args:
   n_chunks: 512
   use_distribution: false
   # pooling: "mean"
+  n_obs_samples: 500
 
-report_interval: 50
+report_interval: 200
 scatter_plot_intervals: [2, 5, 20, 50, 200, 500, 2000, 5000, 20000, 50000]
 verbose_plot: false
 output_dir: "results"
