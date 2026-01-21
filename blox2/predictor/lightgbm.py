@@ -18,7 +18,7 @@ class LightGBMPredictor(Predictor):
         base_params.update(self.lgbm_kwargs)
         base_params.setdefault("verbose", -1)
         if Y.shape[0] < 60:
-            base_params.setdefault("min_child_samples", 1 + Y.shape[0] / 3) # will result in the same predicted values otherwise
+            base_params.setdefault("min_child_samples", int(1 + Y.shape[0] / 3)) # will result in the same predicted values otherwise
 
         for j in range(Y.shape[1]):
             m = LGBMRegressor(**base_params)

@@ -1,4 +1,4 @@
-n_iters: 100
+n_iters: 2000
 sigma: 1
 n_suggestions: 1
 
@@ -22,7 +22,7 @@ selector_args:
     - [0, null]
     - [0, null]
 
-report_interval: 10
+report_interval: 50
 scatter_plot_intervals: [2, 5, 20, 50, 200, 500, 2000, 5000, 20000, 50000]
-verbose_plot: true
+verbose_plot: false
 output_dir: "results"
