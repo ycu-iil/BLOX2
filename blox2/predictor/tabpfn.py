@@ -1,5 +1,4 @@
 import os
-from typing import Any
 import numpy as np
 from huggingface_hub import login, whoami
 from huggingface_hub.utils import HfHubHTTPError

@@ -36,7 +36,15 @@ class Predictor(ABC):
         raise NotImplementedError
 
 class Selector(ABC):    
-    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, sigma: float=1.0, normalize_features: bool=True, value_normalization: str="before_pred", verbose_plot_dir: str=None):
+    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, sigma: float=1.0, normalize_features: bool=True, value_normalization: str="before_pred", pred_clip: list[tuple[float | None, float | None]]=None, verbose_plot_dir: str=None):
+        """
+        value_normalization: 
+            - default: apply after prediction, using the scaler fitted before prediction
+            - before_pred: fit and apply before prediction
+            - after_pred: fit and apply after prediction
+            - disable: diable
+        pred_clip: Valid value range of objectives. This cannot be used with "before_pred".
+        """
         n_obs = len(observed_features)
         n_unobs = len(unobserved_features)
 
@@ -59,6 +67,14 @@ class Selector(ABC):
 
         self.value_normalization = value_normalization
         self.y_scaler = None
+        
+        self.pred_clip = pred_clip
+        if self.pred_clip is not None:
+            if self.value_normalization == "before_pred":
+                raise ValueError("pred_clip cannot be used with value_normalization='before_pred'.")
+            for low, high in self.pred_clip:
+                if low is not None and high is not None and low > high:
+                    raise ValueError(f"Invalid pred_clip range: lo={low} > hi={high}")
         
         self.X_all: np.ndarray = np.vstack([X_obs, X_unobs])
         self.obs_ids: list[int] = list(range(n_obs))
@@ -100,7 +116,11 @@ class Selector(ABC):
 
         X_obs = self.X_obs()
         
-        if self.value_normalization == "before_pred":
+        if self.value_normalization == "default":
+            self.y_scaler = StandardScaler()
+            self.y_scaler.fit(self.Y_obs_raw)
+            Y_obs = self.Y_obs_raw
+        elif self.value_normalization == "before_pred":
             self.y_scaler = StandardScaler()
             self.y_scaler.fit(self.Y_obs_raw)
             Y_obs = self.y_scaler.transform(self.Y_obs_raw)
@@ -122,7 +142,19 @@ class Selector(ABC):
         self.passed_times_pred.append(time.perf_counter() - t0)
         Y_pred0_raw = Y_pred0
         
-        if self.value_normalization == "after_pred":
+        if self.pred_clip is not None:
+            Y_pred0 = self._clip_raw(Y_pred0)
+        
+        if self.value_normalization == "default":
+            if self.use_distribution():
+                m, s, d = Y_pred0.shape
+                Y_pred_2d = Y_pred0.reshape(m * s, d)
+                Y_obs = self.y_scaler.transform(self.Y_obs_raw)
+                Y_pred0 = self.y_scaler.transform(Y_pred_2d).reshape(m, s, d)
+            else:
+                Y_obs = self.y_scaler.transform(self.Y_obs_raw)
+                Y_pred0 = self.y_scaler.transform(Y_pred0)
+        elif self.value_normalization == "after_pred":
             self.y_scaler = StandardScaler()
             if self.use_distribution():
                 m, s, d = Y_pred0.shape
@@ -273,6 +305,30 @@ class Selector(ABC):
         if unobs_ids.size == 0:
             raise ValueError("No unobserved points.")
         return self.X_all[unobs_ids]
+    
+    def _clip_raw(self, Y_raw: np.ndarray) -> np.ndarray:
+        """
+        Clip objective values in raw space using self.pred_clip.
+        """
+        if self.pred_clip is None:
+            return Y_raw
+
+        Y = np.asarray(Y_raw, dtype=float)
+
+        d = Y.shape[-1]
+        if len(self.pred_clip) != d:
+            raise ValueError(f"pred_clip must have length of the number of objectives {d}, but got {len(self.pred_clip)}")
+
+        lo = np.array([(-np.inf if a is None else float(a)) for a, _ in self.pred_clip], dtype=float)
+        hi = np.array([( np.inf if b is None else float(b)) for _, b in self.pred_clip], dtype=float)
+
+        if Y.ndim == 2:
+            return np.minimum(np.maximum(Y, lo[None, :]), hi[None, :])
+
+        if Y.ndim == 3:
+            return np.minimum(np.maximum(Y, lo[None, None, :]), hi[None, None, :])
+
+        raise ValueError(f"Invalid Y_raw.ndim ({Y.ndim}) in predicted value clipping.")
     
     def inverse_transform_y(self, y_scaled: np.ndarray) -> np.ndarray:
         if self.y_scaler is None:
