@@ -1,0 +1,26 @@
+n_iters: 200
+sigma: 1
+n_suggestions: 10
+
+features_path: "data/zinc_dft/feature_list_mfp2048_rdd.npz"
+values_path: "data/zinc_dft/properties.csv"
+initial_n_obs: 10
+
+predictor_class: LightGBMPredictor
+predictor_args:
+  n_estimators: 100
+  seed: 0
+
+selector_class: BLOX2Selector
+selector_args:
+  normalize_features: false
+  value_normalization: default
+  chunk_size: 512
+  pred_clip:
+    - [0, null]
+    - [0, null]
+
+report_interval: 5
+scatter_plot_intervals: [2, 5, 20, 50, 200, 500, 2000, 5000, 20000, 50000]
+verbose_plot: false
+output_dir: "results"
