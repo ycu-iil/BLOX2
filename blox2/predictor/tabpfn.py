@@ -49,9 +49,9 @@ class TabPFNPredictor(Predictor):
             for j in range(d_obj):
                 yj = np.asarray(Y[:, j], float)
                 if type(self.device) == list:
-                    m = TabPFNRegressor(device=self.device[j], n_estimators=self.n_estimators, n_jobs=self.n_jobs)
+                    m = TabPFNRegressor(device=self.device[j], n_estimators=self.n_estimators, n_jobs=self.n_jobs, ignore_pretraining_limits=True)
                 else:
-                    m = TabPFNRegressor(device=self.device, n_estimators=self.n_estimators, n_jobs=self.n_jobs)
+                    m = TabPFNRegressor(device=self.device, n_estimators=self.n_estimators, n_jobs=self.n_jobs, ignore_pretraining_limits=True)
                 m.fit(X, yj)
                 self._models.append(m)
         else:

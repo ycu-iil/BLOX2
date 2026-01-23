@@ -3,6 +3,7 @@ sigma: 1
 n_suggestions: 1
 
 features_path: "data/zinc_dft/feature_list_mfp1024.csv"
+# features_path: "data/zinc_dft/feature_list_mfp2048_rdd.npz"
 values_path: "data/zinc_dft/properties.csv"
 initial_n_obs: 10
 
@@ -14,7 +15,7 @@ predictor_args:
 selector_class: BLOX2Selector
 selector_args:
   normalize_features: false
-  value_normalization: before_pred
+  value_normalization: default
   chunk_size: 512
   use_distribution: false
 
