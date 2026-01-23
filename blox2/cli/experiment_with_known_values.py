@@ -4,7 +4,9 @@ import argparse
 import csv
 from dataclasses import dataclass
 import datetime as _dt
+import faulthandler
 import os
+from pathlib import Path
 import shutil
 import time
 from typing import Any
@@ -85,9 +87,10 @@ def _resolve_selector(class_name: str):
         raise ValueError(f"Selector class '{class_name}' not found in blox2.")
     return getattr(blox2_mod, class_name)
 
-def _make_output_dir(output_dir: str) -> str:
+def _make_output_dir(output_dir: str, config_path: str) -> str:
+    config_name = Path(config_path).stem
     ts = _dt.datetime.now().strftime("%m-%d_%H%M%S")
-    out_dir = os.path.join(output_dir, ts)
+    out_dir = os.path.join(output_dir, f"{ts}_{config_name}")
     scatter_out_dir = os.path.join(out_dir, "scatter")
     os.makedirs(out_dir, exist_ok=True)
     os.makedirs(scatter_out_dir, exist_ok=True)
@@ -176,7 +179,7 @@ def run_experiment(config_path: str) -> str:
     cfg_raw = _load_yaml(config_path)
     cfg = _parse_config(cfg_raw)
 
-    out_dir = _make_output_dir(cfg.output_dir)
+    out_dir = _make_output_dir(cfg.output_dir, config_path)
     _copy_config(config_path, out_dir)
 
     # Load data
@@ -237,9 +240,61 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("-c", "--config", required=True, help="Path to YAML config, e.g. config/example.yaml",)
     return p
 
+def iter_yaml_paths(p: Path, recursive: bool=False) -> list[Path]:
+    """
+    Collect YAML files from a file or directory, sorted by name.
+    """
+    if p.is_file():
+        if p.suffix.lower() not in {".yaml", ".yml"}:
+            raise ValueError(f"Config must be .yaml/.yml, got: {p}")
+        return [p]
+
+    if not p.is_dir():
+        raise FileNotFoundError(f"Config path not found: {p}")
+
+    pattern = "**/*.y*ml" if recursive else "*.y*ml"
+    paths = [x for x in p.glob(pattern) if x.is_file()]
+    paths.sort(key=lambda x: str(x))
+    return paths
+
+def run_batch(config_path: str, recursive: bool=False) -> int:
+    p = Path(config_path).expanduser()
+    yamls = iter_yaml_paths(p, recursive=recursive)
+
+    if not yamls:
+        raise FileNotFoundError(f"No YAML files found in: {p}")
+
+    ok: list[Path] = []
+    ng: list[Path] = []
+
+    for cfg in yamls:
+        try:
+            print("Running: ", cfg)
+            run_experiment(str(cfg))
+            ok.append(cfg)
+        except Exception as e:
+            ng.append(cfg)
+            print(e)
+
+    if (len(ok) + len(ng)) == 1:
+        pass
+    elif len(ng) == 0:
+        print("All runs completed.")
+    else:
+        print("Succeeded: ")
+        for p in ok:
+            print(p)
+        print("Failed: ")
+        for p in ng:
+            print(p)
+            
+    return 0 if not ng else 1 # exit code
+
 def main() -> None:
     args = build_parser().parse_args()
-    run_experiment(args.config)
+    exit_code = run_batch(args.config)
+    raise SystemExit(exit_code)
 
 if __name__ == "__main__":
+    faulthandler.enable()
     main()
