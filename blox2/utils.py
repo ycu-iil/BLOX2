@@ -30,7 +30,7 @@ def load_features(path: str, header=None) -> pd.DataFrame:
     suffix = path.suffix.lower()
 
     if suffix == ".csv":
-        return pd.read_csv(path, header=header).to_numpy()
+        return pd.read_csv(path, header=header)
 
     elif suffix == ".npz":
         z = np.load(path, allow_pickle=True)
