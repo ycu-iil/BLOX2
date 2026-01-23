@@ -1,6 +1,7 @@
 from pathlib import Path
 import numpy as np
 import pandas as pd
+from sklearn.preprocessing import StandardScaler
 
 def hesgau_repli(x, y, sigma):
     """Defined for validation purpose, and not used in actual selection. From the original BLOX: https://github.com/tsudalab/BLOX/blob/master/"""
@@ -49,3 +50,32 @@ def load_features(path: str, header=None) -> pd.DataFrame:
         return pd.DataFrame(X)
     else:
         raise ValueError(f"Unsupported feature format: {suffix}")
+    
+def make_scaler(scale: np.ndarray | StandardScaler, d: int) -> StandardScaler:
+    if isinstance(scale, StandardScaler):
+        return scale
+
+    S = np.asarray(scale)
+    if S.ndim != 2:
+        raise ValueError(f"scale ndarray must be 2D (n_scale, d); got shape {S.shape}")
+    if S.shape[1] != d:
+        raise ValueError(f"scale has d={S.shape[1]} but observation_history has d={d}")
+
+    return StandardScaler().fit(S)
+
+def make_trajectory(initial_observed_properties_path, observation_histories_path, all_properties_path) -> np.ndarray:
+    """
+    Returns ndarray of shape (n_observed, d_properties): History of observed properties (including initial points), scaled with all properties (including unobserved ones).
+    """
+    # read data
+    df1 = pd.read_csv(initial_observed_properties_path, header=None)
+    df2 = pd.read_csv(observation_histories_path, header=None)
+    df = pd.concat([df1, df2], axis=0, ignore_index=True)
+    
+    # scale with all props
+    all_props = pd.read_csv(all_properties_path).to_numpy()
+    scaler = make_scaler(all_props, d=2)
+    trajectory = df.to_numpy()
+    trajectory = scaler.transform(trajectory)
+
+    return trajectory

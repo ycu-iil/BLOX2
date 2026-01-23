@@ -23,7 +23,7 @@ plt.rcParams.update({
     "legend.fontsize": 16,
 })
 
-from blox2 import calc_stein_discrepancy_trajectory, split_df_by_n_rows, load_features
+from blox2 import stein_discrepancy_trajectory, split_df_by_n_rows, load_features
 
 @dataclass(frozen=True)
 class ExperimentConfig:
@@ -98,7 +98,7 @@ def _copy_config(config_path: str, out_dir: str) -> None:
     shutil.copyfile(config_path, dst)
 
 def _write_candidate_history_csv(out_dir: str, selector) -> None:
-    path = os.path.join(out_dir, "candidate_histories.csv")
+    path = os.path.join(out_dir, "candidate_history.csv")
     with open(path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         for x in selector.candidate_id_history[selector.initial_n_obs:]:
@@ -107,7 +107,7 @@ def _write_candidate_history_csv(out_dir: str, selector) -> None:
 def _write_observation_csvs(out_dir: str, selector) -> np.ndarray:
     observation_history = selector.make_observation_history()
     np.savetxt(os.path.join(out_dir, "initial_observed_properties.csv"), observation_history[:selector.initial_n_obs], delimiter=",",)
-    np.savetxt(os.path.join(out_dir, "observation_histories.csv"), observation_history[selector.initial_n_obs:], delimiter=",",)
+    np.savetxt(os.path.join(out_dir, "observation_history.csv"), observation_history[selector.initial_n_obs:], delimiter=",",)
     return observation_history
 
 def _write_time_consumption(out_dir: str, selector) -> None:
@@ -129,7 +129,7 @@ def _write_time_consumption(out_dir: str, selector) -> None:
     plt.close()
 
 def _plot_stein_discrepancy(out_dir: str, observation_history: np.ndarray, fixed_data_for_scaler: np.ndarray, sigma: float, initial_n_obs: int, cutoff: int=0):
-    sd_trajectory = calc_stein_discrepancy_trajectory(observation_history, scale=fixed_data_for_scaler, sigma=sigma,)
+    sd_trajectory = stein_discrepancy_trajectory(observation_history, scale=fixed_data_for_scaler, sigma=sigma,)
 
     y = sd_trajectory[initial_n_obs + cutoff:]
     x = np.arange(cutoff + 1, cutoff + 1 + len(y))
@@ -150,7 +150,7 @@ def _plot_stein_discrepancy(out_dir: str, observation_history: np.ndarray, fixed
     plt.savefig(os.path.join(out_dir, f"stein_discrepancy_s={sigma}.png"))
     plt.close()
 
-    np.savetxt(os.path.join(out_dir, f"stein_discrepancy_histories_s={sigma}.csv"), sd_trajectory[initial_n_obs:], delimiter=",",)
+    np.savetxt(os.path.join(out_dir, f"stein_discrepancy_history_s={sigma}.csv"), sd_trajectory[initial_n_obs:], delimiter=",",)
 
 def _plot_scatter(out_dir: str, observation_history: np.ndarray, initial_n_obs: int, intervals: list[int], x_label: str, y_label: str):
     for n in intervals:

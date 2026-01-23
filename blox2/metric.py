@@ -1,7 +1,9 @@
 import numpy as np
 from sklearn.preprocessing import StandardScaler
+from scipy.spatial import ConvexHull, QhullError
+from .utils import make_scaler
 
-def calc_stein_discrepancy_trajectory(observation_history: np.ndarray, scale: np.ndarray | StandardScaler, sigma: float, copy: bool=True) -> np.ndarray:
+def stein_discrepancy_trajectory(observation_history: np.ndarray, scale: np.ndarray | StandardScaler, sigma: float, copy: bool=True) -> np.ndarray:
     """
     Compute the trajectory of the estimate of Stein discrepancy under a Gaussian kernel with a fixed scaler.
 
@@ -13,7 +15,7 @@ def calc_stein_discrepancy_trajectory(observation_history: np.ndarray, scale: np
         copy : If True, copy input arrays when casting.
 
     Returns:
-        (n_steps,) array, with NaN for n<2.
+        (n_steps,) array.
     """
     if not (np.isfinite(sigma) and sigma > 0):
         raise ValueError(f"sigma must be a positive finite float; got {sigma}")
@@ -28,7 +30,7 @@ def calc_stein_discrepancy_trajectory(observation_history: np.ndarray, scale: np
     if n_steps == 0:
         return np.empty((0,))
 
-    scaler = _make_scaler(scale, d)
+    scaler = make_scaler(scale, d)
     Y = scaler.transform(Y_hist.copy() if copy else Y_hist)
 
     inv_sigma2 = 1.0 / sigma2
@@ -56,14 +58,20 @@ def calc_stein_discrepancy_trajectory(observation_history: np.ndarray, scale: np
 
     return stein_hat
 
-def _make_scaler(scale: np.ndarray | StandardScaler, d: int) -> StandardScaler:
-    if isinstance(scale, StandardScaler):
-        return scale
+def convex_hull_area_trajectory(X: np.ndarray, qhull_options: str="QJ") -> np.ndarray:
+    X = np.asarray(X, dtype=float)
+    if X.ndim != 2 or X.shape[1] != 2:
+        raise ValueError(f"X must be shape (N,2), got {X.shape}")
 
-    S = np.asarray(scale)
-    if S.ndim != 2:
-        raise ValueError(f"scale ndarray must be 2D (n_scale, d); got shape {S.shape}")
-    if S.shape[1] != d:
-        raise ValueError(f"scale has d={S.shape[1]} but observation_history has d={d}")
+    N = X.shape[0]
+    areas = np.zeros(N, dtype=float)
 
-    return StandardScaler().fit(S)
+    for k in range(3, N + 1):
+        pts = X[:k]
+        try:
+            hull = ConvexHull(pts, qhull_options=qhull_options)
+            areas[k - 1] = float(hull.volume)  # 2D: area
+        except QhullError: # collinear/degenerate etc. -> treat as area 0
+            areas[k - 1] = 0.0
+
+    return areas
