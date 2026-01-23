@@ -17,6 +17,7 @@ def stein_discrepancy_trajectory(observation_history: np.ndarray, scale: np.ndar
     Returns:
         (n_steps,) array.
     """
+    # TODO: integrate with other metrics?
     if not (np.isfinite(sigma) and sigma > 0):
         raise ValueError(f"sigma must be a positive finite float; got {sigma}")
     
@@ -75,3 +76,21 @@ def convex_hull_area_trajectory(X: np.ndarray, qhull_options: str="QJ") -> np.nd
             areas[k - 1] = 0.0
 
     return areas
+
+def convex_hull_perimeter_trajectory(X: np.ndarray, qhull_options: str="QJ") -> np.ndarray:
+    X = np.asarray(X, dtype=float)
+    if X.ndim != 2 or X.shape[1] != 2:
+        raise ValueError(f"X must be shape (N,2), got {X.shape}")
+
+    N = X.shape[0]
+    perims = np.zeros(N, dtype=float)
+
+    for k in range(3, N + 1):
+        pts = X[:k]
+        try:
+            hull = ConvexHull(pts, qhull_options=qhull_options)
+            perims[k - 1] = float(hull.area) # says area, but actually perimeter in 2D
+        except QhullError:
+            perims[k - 1] = 0.0
+
+    return perims
