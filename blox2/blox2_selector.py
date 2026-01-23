@@ -5,7 +5,7 @@ from .base import Selector, Predictor
 from .utils import stein_novelty_repli
 
 class BLOX2Selector(Selector):
-    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, value_normalization: str="default", pred_clip: list[tuple[float | None, float | None]]=None, sigma: float=1.0, n_obs_samples: int=None, n_chunks: int=256, use_distribution: bool=False, pooling: str="mean", compare_selection_time=False, verbose_plot_dir: str=None):
+    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, value_normalization: str="default", pred_clip: list[tuple[float | None, float | None]]=None, sigma: float=1.0, n_obs_samples: int=None, chunk_size: int=256, use_distribution: bool=False, pooling: str="mean", compare_selection_time=False, verbose_plot_dir: str=None):
         """
         Args:
             value_normalization: 
@@ -21,7 +21,7 @@ class BLOX2Selector(Selector):
         self._use_distribution = use_distribution
         self.compare_selection_time = compare_selection_time
         self.n_obs_samples = n_obs_samples
-        self.n_chunks = n_chunks
+        self.chunk_size = chunk_size
         self.pooling = pooling
         
         if compare_selection_time:
@@ -50,8 +50,8 @@ class BLOX2Selector(Selector):
         best_score = -np.inf
         
         if self.use_distribution(): # X_pred: (n_unobs, n_samples, d)
-            for s in range(0, len(unobs_ids), self.n_chunks):
-                e = min(s + self.n_chunks, len(unobs_ids))
+            for s in range(0, len(unobs_ids), self.chunk_size):
+                e = min(s + self.chunk_size, len(unobs_ids))
 
                 Xc = X_pred[s:e] # (c, n_samples, d)
                 n_samples = Xc.shape[1]
@@ -78,8 +78,8 @@ class BLOX2Selector(Selector):
                     best_score = scores[j]
                     best_id = int(unobs_ids[s + j])
         else: # X_pred: (n_unobs, d)
-            for s in range(0, len(unobs_ids), self.n_chunks):
-                e = min(s + self.n_chunks, len(unobs_ids))
+            for s in range(0, len(unobs_ids), self.chunk_size):
+                e = min(s + self.chunk_size, len(unobs_ids))
 
                 Xc = X_pred[s:e] # (c, d)
                 diff = Y[None, :, :] - Xc[:, None, :] # (c, n_obs, d)

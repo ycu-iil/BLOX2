@@ -15,7 +15,7 @@ selector_class: BLOX2Selector
 selector_args:
   normalize_features: false
   value_normalization: before_pred
-  n_chunks: 512
+  chunk_size: 512
   use_distribution: false
   # pooling: "mean"
   n_obs_samples: 500
