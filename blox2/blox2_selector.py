@@ -42,7 +42,7 @@ class BLOX2Selector(Selector):
         if self.n_obs_samples is not None and self.n_obs_samples > 0 and self.n_obs_samples < n:
             idx = np.random.choice(n, self.n_obs_samples, replace=False)
             Y = Y_full[idx]
-            Y = np.asfortranarray(Y) # enforce Fortran order to avoid selection-time bloat (tested, but might be device-dependent)
+            Y = np.asfortranarray(Y) # enforce Fortran order to avoid selection-time bloat (tested)
         else:
             Y = Y_full
 
