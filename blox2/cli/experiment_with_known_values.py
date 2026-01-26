@@ -249,8 +249,8 @@ def iter_yaml_paths(p: Path, recursive: bool=False) -> list[Path]:
     paths.sort(key=lambda x: str(x))
     return paths
 
-def run_batch(config_path: str, recursive: bool=False) -> int:
-    p = Path(config_path).expanduser()
+def run_batch(config_dir: str, recursive: bool=False) -> int:
+    p = Path(config_dir).expanduser()
     yamls = iter_yaml_paths(p, recursive=recursive)
 
     if not yamls:
