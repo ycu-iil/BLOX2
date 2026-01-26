@@ -36,7 +36,7 @@ class BLOX2Selector(Selector):
         
         Y_full = Y_obs
         n, d = Y_full.shape
-        sigma2 = self.squared_sigma
+        sigma2 = self.squared_sigma()
         unobs_ids = self.unobs_ids()
 
         if self.n_obs_samples is not None and self.n_obs_samples > 0 and self.n_obs_samples < n:
@@ -112,7 +112,7 @@ class BLOX2Selector(Selector):
         best_id = -1
         best_score = -np.inf
         for i, cid in enumerate(unobs_ids):
-            s = stein_novelty_repli(X_pred[i], Y, self.squared_sigma)
+            s = stein_novelty_repli(X_pred[i], Y, self.squared_sigma())
             if s > best_score:
                 best_score = s
                 best_id = int(cid)

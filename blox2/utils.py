@@ -1,7 +1,29 @@
+from bisect import bisect_right
 from pathlib import Path
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
+
+class PointCurve():
+    def __init__(self, points: list[tuple[float, float]]):
+        if not points:
+            raise ValueError("Points must not be empty")
+
+        points.sort()
+        self.xs, self.ys = zip(*points)
+
+    def curve(self, x: float) -> float:
+        if x <= self.xs[0]:
+            return self.ys[0]
+        if x >= self.xs[-1]:
+            return self.ys[-1]
+
+        i = bisect_right(self.xs, x)
+        x0, y0 = self.xs[i - 1], self.ys[i - 1]
+        x1, y1 = self.xs[i], self.ys[i]
+
+        t = (x - x0) / (x1 - x0)
+        return y0 + t * (y1 - y0)
 
 def hesgau_repli(x, y, sigma):
     """Ported for validation purpose, and not used in actual selection. From the original BLOX: https://github.com/tsudalab/BLOX/blob/master/"""

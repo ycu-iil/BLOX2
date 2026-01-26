@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
+from .utils import PointCurve
 
 class Predictor(ABC):
     def fit(self, X: np.ndarray, Y: np.ndarray):
@@ -36,7 +37,7 @@ class Predictor(ABC):
         raise NotImplementedError
 
 class Selector(ABC):    
-    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, sigma: float=1.0, normalize_features: bool=True, value_normalization: str="before_pred", pred_clip: list[tuple[float | None, float | None]]=None, verbose_plot_dir: str=None):
+    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, sigma: float | list[tuple[int, float]]=1.0, normalize_features: bool=True, value_normalization: str="before_pred", pred_clip: list[tuple[float | None, float | None]]=None, verbose_plot_dir: str=None):
         """
         value_normalization: 
             - default: apply after prediction, using the scaler fitted before prediction
@@ -83,8 +84,7 @@ class Selector(ABC):
         self.unchecked_mask[:n_obs] = False
         
         self.predictor = predictor
-        self.sigma = sigma
-        self.squared_sigma = sigma ** 2
+        self._sigma = sigma
         
         self.verbose_plot_dir = verbose_plot_dir
         if self.verbose_plot_dir is not None:
@@ -94,6 +94,16 @@ class Selector(ABC):
         self.passed_times_train = []
         self.passed_times_pred = []
         self.passed_times_total = []
+        
+    def sigma(self) -> float:
+        if type(self._sigma) == PointCurve:
+            current_iter = len(self.candidate_id_history) - self.initial_n_obs
+            return self._sigma.curve(current_iter)
+        else:
+            return self._sigma
+        
+    def squared_sigma(self) -> float:
+        return self.sigma() ** 2
 
     def best_id(self, X_pred: np.ndarray, Y_obs: np.ndarray) -> int:
         raise NotImplementedError
