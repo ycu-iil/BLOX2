@@ -1,5 +1,4 @@
 n_iters: 2000
-sigma: 1
 n_suggestions: 1
 
 features_path: "data/zinc_dft/feature_list_mfp2048_rdd.npz"
@@ -13,6 +12,7 @@ predictor_args:
 
 selector_class: BLOX2Selector
 selector_args:
+  sigma: 1
   normalize_features: false
   value_normalization: before_pred
   chunk_size: 512

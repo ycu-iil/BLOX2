@@ -84,7 +84,10 @@ class Selector(ABC):
         self.unchecked_mask[:n_obs] = False
         
         self.predictor = predictor
-        self._sigma = sigma
+        if type(sigma) == list:
+            self._sigma = PointCurve(sigma)
+        else:
+            self._sigma = sigma
         
         self.verbose_plot_dir = verbose_plot_dir
         if self.verbose_plot_dir is not None:
@@ -97,7 +100,7 @@ class Selector(ABC):
         
     def sigma(self) -> float:
         if type(self._sigma) == PointCurve:
-            current_iter = len(self.candidate_id_history) - self.initial_n_obs
+            current_iter = len(self.candidate_id_history) - self.initial_n_obs + 1 # 1-indexed
             return self._sigma.curve(current_iter)
         else:
             return self._sigma

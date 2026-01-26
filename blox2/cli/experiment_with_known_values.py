@@ -30,7 +30,6 @@ from blox2 import split_df_by_n_rows, load_features
 @dataclass(frozen=True)
 class ExperimentConfig:
     n_iters: int
-    sigma: float
     n_suggestions: int
 
     features_path: str
@@ -56,7 +55,6 @@ def _load_yaml(path: str) -> dict[str, Any]:
 def _parse_config(d: dict[str, Any]) -> ExperimentConfig:    
     cfg = ExperimentConfig(
         n_iters=int(d["n_iters"]),
-        sigma=float(d["sigma"]),
         n_suggestions=int(d.get("n_suggestions", 1)),
         features_path=str(d["features_path"]),
         values_path=str(d["values_path"]),
@@ -197,7 +195,7 @@ def run_experiment(config_path: str) -> str:
         verbose_plot_dir = os.path.join(out_dir, "verbose_plots")
     else:
         verbose_plot_dir = None
-    selector = selector_class(observed_features, observed_values, unchecked_features, predictor, sigma=cfg.sigma, verbose_plot_dir=verbose_plot_dir, **cfg.selector_args)
+    selector = selector_class(observed_features, observed_values, unchecked_features, predictor, verbose_plot_dir=verbose_plot_dir, **cfg.selector_args)
 
     # Main loop
     print("Starting the main loop.")
