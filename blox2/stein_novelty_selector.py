@@ -4,7 +4,7 @@ import pandas as pd
 from .base import Selector, Predictor
 from .utils import stein_novelty_repli
 
-class BLOX2Selector(Selector):
+class SteinNoveltySelector(Selector):
     def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, value_normalization: str="default", pred_clip: list[tuple[float | None, float | None]]=None, sigma: float=1.0, n_obs_samples: int=None, chunk_size: int=256, use_distribution: bool=False, pooling: str="mean", compare_selection_time=False, verbose_plot_dir: str=None):
         """
         Args:

@@ -10,7 +10,7 @@ predictor_args:
   n_estimators: 10
   random_state: 0
 
-selector_class: BLOX2Selector
+selector_class: SteinNoveltySelector
 selector_args:
   sigma: 1
   normalize_features: false
