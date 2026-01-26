@@ -35,7 +35,7 @@ class BLOX2Selector(Selector):
         t0 = time.perf_counter()
         
         Y_full = Y_obs
-        n, d = Y_full.shape
+        n, dim = Y_full.shape
         sigma2 = self.squared_sigma()
         unobs_ids = self.unobs_ids()
 
@@ -64,7 +64,7 @@ class BLOX2Selector(Selector):
                     diff = Y[None, :, :] - x[:, None, :] # (c, n_obs, d)
                     dist = np.sum(diff * diff, axis=2) # (c, n_obs)
 
-                    scores_per_sample[k] = np.sum((dist - d * sigma2) * np.exp(-dist / (2 * sigma2)), axis=1)
+                    scores_per_sample[k] = np.sum((dist - dim * sigma2) * np.exp(-dist / (2 * sigma2)), axis=1) # * - sigma2^2 (from the original)
 
                 if self.pooling == "mean":
                     scores = scores_per_sample.mean(axis=0) # (c,)
@@ -85,7 +85,7 @@ class BLOX2Selector(Selector):
                 diff = Y[None, :, :] - Xc[:, None, :] # (c, n_obs, d)
                 dist = np.sum(diff * diff, axis=2) # (c, n_obs)
 
-                scores = np.sum((dist - d * sigma2) * np.exp(-dist / (2 * sigma2)), axis=1)
+                scores = np.sum((dist - dim * sigma2) * np.exp(-dist / (2 * sigma2)), axis=1)
 
                 j = np.argmax(scores)
                 if scores[j] > best_score:
