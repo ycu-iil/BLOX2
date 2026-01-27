@@ -25,7 +25,7 @@ class Predictor(ABC):
 
     def pred_samples(self, X: np.ndarray) -> np.ndarray:
         """
-        Predict objective samples for candidates.
+        (Optional) Predict objective samples for candidates.
 
         Args:
             X: (m, d_feat) or (d_feat,)
@@ -33,6 +33,18 @@ class Predictor(ABC):
 
         Returns:
             samples: (m, n_samples, d_obj)
+        """
+        raise NotImplementedError
+    
+    def uncertainty(self, X: np.ndarray) -> np.ndarray:
+        """
+        (Optional) Estimate uncertainty. Called after pred(), so it might be better to cache this value on pred() call depending on the predictor.
+
+        Args:
+            X: (m, d_feat)
+
+        Returns:
+            uncertainty: (m, d_obj)
         """
         raise NotImplementedError
 
@@ -108,11 +120,15 @@ class Selector(ABC):
     def squared_sigma(self) -> float:
         return self.sigma() ** 2
 
-    def best_id(self, X_pred: np.ndarray, Y_obs: np.ndarray) -> int:
+    def best_id(self, X_pred: np.ndarray, Y_obs: np.ndarray, uncertainty: np.ndarray=None) -> int:
         raise NotImplementedError
     
     # needs to be overridden to use posterior distributuon for acquisition functions
     def use_distribution(self) -> bool:
+        return False
+    
+    # needs to be overridden to use uncertainty for acquisition functions
+    def use_uncertainty(self) -> bool:
         return False
 
     def next_candidate(self) -> int:
@@ -183,6 +199,21 @@ class Selector(ABC):
                 Y_pred0 = self.y_scaler.transform(Y_pred0)
         else:
             pass
+        
+        if self.use_uncertainty():
+            if self.use_distribution():
+                raise RuntimeError("use_uncertainty() with use_distribution() is not supported.")
+            if not hasattr(self.predictor, "uncertainty"):
+                raise RuntimeError("Selector.use_uncertainty() is True but predictor has no uncertainty().")
+
+            t_u = time.perf_counter()
+            U0 = self.predictor.uncertainty(X_unobs0) # (m, d_obj)
+            self.passed_times_pred[-1] += (time.perf_counter() - t_u)
+
+            if U0.ndim != 2 or U0.shape[0] != len(unobs_ids0):
+                raise ValueError(f"uncertainty must be (m,d_obj) with m=len(unobs_ids0)={len(unobs_ids0)}, got {U0.shape}")
+
+            unc_by_id = {int(cid): U0[i] for i, cid in enumerate(unobs_ids0)}
 
         # cache predictions by id to rebuild X_pred in the current unobs_ids() order
         pred_by_id = {int(cid): Y_pred0[i] for i, cid in enumerate(unobs_ids0)}
@@ -201,9 +232,14 @@ class Selector(ABC):
                 X_pred_cur = np.stack([pred_by_id[int(cid)] for cid in cur_unobs_ids], axis=0)
             else:
                 X_pred_cur = np.vstack([pred_by_id[int(cid)] for cid in cur_unobs_ids])
-                
+            
+            if self.use_uncertainty():
+                U_cur = np.vstack([unc_by_id[int(cid)] for cid in cur_unobs_ids]) # (n_cur, d_obj)
+            else:
+                U_cur = None
+
             t0 = time.perf_counter()
-            cid = self.best_id(X_pred_cur, Y_obs)
+            cid = self.best_id(X_pred_cur, Y_obs, uncertainty=U_cur)
             selection_time += time.perf_counter() - t0
             self.candidate_id_history.append(cid)
 

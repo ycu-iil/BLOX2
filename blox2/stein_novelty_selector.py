@@ -5,7 +5,7 @@ from .base import Selector, Predictor
 from .utils import stein_novelty_repli
 
 class SteinNoveltySelector(Selector):
-    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, value_normalization: str="default", pred_clip: list[tuple[float | None, float | None]]=None, sigma: float=1.0, n_obs_samples: int=None, chunk_size: int=256, use_distribution: bool=False, pooling: str="mean", compare_selection_time=False, verbose_plot_dir: str=None):
+    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, value_normalization: str="default", pred_clip: list[tuple[float | None, float | None]]=None, sigma: float=1.0, n_obs_samples: int=None, chunk_size: int=256, use_uncertainty=False, uncertainty_ratio: float=0.2, uncertainty_aggregation_type: str="mean", print_uncertainty: bool=False, use_distribution: bool=False, pooling: str="mean", compare_selection_time=False, verbose_plot_dir: str=None):
         """
         Args:
             value_normalization: 
@@ -17,8 +17,13 @@ class SteinNoveltySelector(Selector):
             n_obs_samples: When the number of observed points are greater than this value, samples n_obs_samples points for Stein novelty calculation instead of using all of the observed points.
             pooling: How to use Stein novelty scores of predicted samples when 'use_distribution'=True. Can be one of: "mean" / "max"
         """
-        super().__init__(observed_features, observed_values, unobserved_features, predictor, sigma=sigma, normalize_features=normalize_features, value_normalization=value_normalization, pred_clip=pred_clip, verbose_plot_dir=verbose_plot_dir)
+        super().__init__(observed_features, observed_values, unobserved_features, predictor, sigma=sigma, normalize_features=normalize_features, value_normalization=value_normalization, pred_clip=pred_clip, verbose_plot_dir=verbose_plot_dir)     
+
         self._use_distribution = use_distribution
+        self._use_uncertainty = use_uncertainty
+        self.uncertainty_ratio = uncertainty_ratio
+        self.uncertainty_aggregation_type = uncertainty_aggregation_type
+        self.print_uncertainty = print_uncertainty
         self.compare_selection_time = compare_selection_time
         self.n_obs_samples = n_obs_samples
         self.chunk_size = chunk_size
@@ -30,8 +35,11 @@ class SteinNoveltySelector(Selector):
             
     def use_distribution(self):
         return self._use_distribution
+    
+    def use_uncertainty(self):
+        return self._use_uncertainty
             
-    def best_id(self, X_pred: np.ndarray, Y_obs: np.ndarray) -> int:
+    def best_id(self, X_pred: np.ndarray, Y_obs: np.ndarray, uncertainty: np.ndarray=None) -> int:
         t0 = time.perf_counter()
         
         Y_full = Y_obs
@@ -86,10 +94,38 @@ class SteinNoveltySelector(Selector):
                 dist = np.sum(diff * diff, axis=2) # (c, n_obs)
 
                 scores = np.sum((dist - dim * sigma2) * np.exp(-dist / (2 * sigma2)), axis=1)
+                
+                if self.use_uncertainty():                      
+                    Uc = uncertainty[s:e] # (c, d_obj)
+                    uc = self._aggregate_uncertainty(Uc) # (c,)
 
-                j = np.argmax(scores)
-                if scores[j] > best_score:
-                    best_score = scores[j]
+                    # z-score for Stein novelty
+                    sm = scores.mean()
+                    ss = scores.std()
+                    z_scores = (scores - sm) / ss if ss > 1e-12 else (scores - sm)
+
+                    # z-score for uncertainty
+                    um = uc.mean()
+                    us = uc.std()
+                    z_u = (uc - um) / us if us > 1e-12 else (uc - um)
+
+                    # conbine
+                    combined = z_scores + self.uncertainty_ratio * z_u
+                    j = np.argmax(combined)
+                    score_j = combined[j]
+                    if self.print_uncertainty:
+                        score_j2 = z_scores[j]
+                    
+                else:
+                    j = np.argmax(scores)
+                    score_j = scores[j]
+
+                if score_j > best_score:
+                    # for testing
+                    if self.use_uncertainty() and self.print_uncertainty:
+                        print(score_j2, score_j-score_j2, score_j)
+                    
+                    best_score = score_j
                     best_id = int(unobs_ids[s + j])
                     
         # print("n_full=", Y_full.shape[0], "Y=", Y.shape, "dtype", Y.dtype, "C", Y.flags['C_CONTIGUOUS'], "F", Y.flags['F_CONTIGUOUS'])
@@ -121,3 +157,24 @@ class SteinNoveltySelector(Selector):
             self.passed_times_repli.append(time.perf_counter() - t0)
 
         return best_id
+    
+    def _aggregate_uncertainty(self, U: np.ndarray) -> np.ndarray:
+        """
+        Args:
+            U: (m, d_obj) uncertainty per objective
+
+        Returns:
+            u: (m,) aggregated uncertainty
+        """
+        U = np.asarray(U, float)
+        if U.ndim != 2:
+            raise ValueError(f"U must be 2D (m, d_obj), got shape={U.shape}")
+
+        if self.uncertainty_aggregation_type == "mean":
+            return U.mean(axis=1)
+        elif self.uncertainty_aggregation_type == "max":
+            return U.max(axis=1)
+        elif self.uncertainty_aggregation_type == "l2":
+            return np.sqrt(np.sum(U * U, axis=1))
+        else:
+            raise ValueError(f"Unknown uncertainty_agg: {self.uncertainty_aggregation_type}")
