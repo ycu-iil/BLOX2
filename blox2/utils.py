@@ -2,6 +2,7 @@ from bisect import bisect_right
 from pathlib import Path
 import numpy as np
 import pandas as pd
+import random
 from sklearn.preprocessing import StandardScaler
 
 class PointCurve():
@@ -101,3 +102,11 @@ def make_scaled_trajectory(initial_observed_properties_path, observation_histori
     trajectory = scaler.transform(trajectory)
 
     return trajectory
+
+def set_seed(seed: int=None):
+    if seed is None:    
+        seed = int(time.time()*1000) % (2**32)
+        print("seed: " + str(seed))
+    
+    random.seed(seed)
+    np.random.seed(seed)

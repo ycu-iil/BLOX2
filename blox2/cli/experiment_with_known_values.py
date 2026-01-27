@@ -25,12 +25,13 @@ plt.rcParams.update({
     "legend.fontsize": 16,
 })
 
-from blox2 import split_df_by_n_rows, load_features
+from blox2 import split_df_by_n_rows, load_features, set_seed
 
 @dataclass(frozen=True)
 class ExperimentConfig:
     n_iters: int
     n_suggestions: int
+    seed: int
 
     features_path: str
     values_path: str
@@ -56,6 +57,7 @@ def _parse_config(d: dict[str, Any]) -> ExperimentConfig:
     cfg = ExperimentConfig(
         n_iters=int(d["n_iters"]),
         n_suggestions=int(d.get("n_suggestions", 1)),
+        seed=int(d.get("seed", 0)),
         features_path=str(d["features_path"]),
         values_path=str(d["values_path"]),
         initial_n_obs=int(d["initial_n_obs"]),
@@ -173,6 +175,9 @@ def run_experiment(config_path: str) -> str:
 
     out_dir = _make_output_dir(cfg.output_dir, config_path)
     _copy_config(config_path, out_dir)
+    
+    # Set seed
+    set_seed(cfg.seed)
 
     # Load data
     print("Loading data...")
