@@ -79,3 +79,58 @@ def convex_hull_perimeter_trajectory(X: np.ndarray, qhull_options: str="QJ") -> 
             perims[k - 1] = 0.0
 
     return perims
+
+def occupancy_trajectory(X: np.ndarray, X_all: np.ndarray=None, bins: int=50, bounds: tuple[tuple[float, float], tuple[float, float]]=None) -> np.ndarray:
+    """
+    (# unique grid cells hit by points) / (total grid cells), where the grid bounds are fixed by:
+      - bounds if provided, else
+      - X_all if provided, else
+      - X (only observed data; not recommended for comparisons)
+
+    Args:
+        X : (N, 2) points in time/order.
+        X_all : (M, 2) points used to fix the grid bounds (recommended).
+        bins : number of bins per axis (bins x bins grid).
+        bounds : ((xmin, xmax), (ymin, ymax)) explicit bounds (overrides X_all).
+    """
+    X = np.asarray(X, dtype=float)
+    if X.ndim != 2 or X.shape[1] != 2:
+        raise ValueError(f"X must be shape (N,2), got {X.shape}")
+    if X_all is None:
+        X_ref = X
+    else:
+        X_ref = np.asarray(X_all, dtype=float)
+        if X_ref.ndim != 2 or X_ref.shape[1] != 2:
+            raise ValueError(f"X_all must be shape (M,2), got {X_ref.shape}")
+
+    if bounds is None:
+        xmin, ymin = np.min(X_ref, axis=0)
+        xmax, ymax = np.max(X_ref, axis=0)
+    else:
+        (xmin, xmax), (ymin, ymax) = bounds
+
+    # range
+    eps = 1e-12
+    xr = max(xmax - xmin, eps)
+    yr = max(ymax - ymin, eps)
+
+    N = X.shape[0]
+    occ = np.zeros(N, dtype=float)
+
+    # map points -> integer cell indices (0..bins-1)
+    # clip if points fall outside bounds
+    def to_cell_ids(pts: np.ndarray) -> np.ndarray:
+        u = (pts[:, 0] - xmin) / xr
+        v = (pts[:, 1] - ymin) / yr
+        ix = np.clip((u * bins).astype(int), 0, bins - 1)
+        iy = np.clip((v * bins).astype(int), 0, bins - 1)
+        # combine into single id
+        return ix * bins + iy
+
+    total_cells = bins * bins
+
+    for k in range(1, N + 1):
+        ids = to_cell_ids(X[:k])
+        occ[k - 1] = np.unique(ids).size / total_cells
+
+    return occ
