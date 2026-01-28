@@ -86,47 +86,6 @@ class SteinNoveltySelector(Selector):
                     best_score = scores[j]
                     best_id = int(unobs_ids[s + j])
         else: # X_pred: (n_unobs, d)
-            # for s in range(0, len(unobs_ids), self.chunk_size):
-            #     e = min(s + self.chunk_size, len(unobs_ids))
-
-            #     Xc = X_pred[s:e] # (c, d)
-            #     diff = Y[None, :, :] - Xc[:, None, :] # (c, n_obs, d)
-            #     dist = np.sum(diff * diff, axis=2) # (c, n_obs)
-
-            #     scores = np.sum((dist - dim * sigma2) * np.exp(-dist / (2 * sigma2)), axis=1)
-                
-            #     if self.use_uncertainty():                      
-            #         Uc = uncertainty[s:e] # (c, d_obj)
-            #         uc = self._aggregate_uncertainty(Uc) # (c,)
-
-            #         # z-score for Stein novelty
-            #         sm = scores.mean()
-            #         ss = scores.std()
-            #         z_scores = (scores - sm) / ss if ss > 1e-12 else (scores - sm)
-
-            #         # z-score for uncertainty
-            #         um = uc.mean()
-            #         us = uc.std()
-            #         z_u = (uc - um) / us if us > 1e-12 else (uc - um)
-
-            #         # conbine
-            #         combined = z_scores + self.uncertainty_ratio * z_u
-            #         j = np.argmax(combined)
-            #         score_j = combined[j]
-            #         if self.print_uncertainty:
-            #             score_j2 = z_scores[j]
-                    
-            #     else:
-            #         j = np.argmax(scores)
-            #         score_j = scores[j]
-
-            #     if score_j > best_score:
-            #         # for testing
-            #         if self.use_uncertainty() and self.print_uncertainty:
-            #             print(score_j2, score_j-score_j2, score_j)
-                    
-            #         best_score = score_j
-            #         best_id = int(unobs_ids[s + j])
             for s in range(0, len(unobs_ids), self.chunk_size):
                 e = min(s + self.chunk_size, len(unobs_ids))
 
