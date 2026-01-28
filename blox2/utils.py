@@ -89,17 +89,20 @@ def make_scaler(scale: np.ndarray | StandardScaler, d: int) -> StandardScaler:
 def make_scaled_trajectory(initial_observed_properties_path, observation_histories_path, all_properties_path) -> np.ndarray:
     """
     Returns ndarray of shape (n_observed, d_properties): History of observed properties (including initial points), scaled with all properties (including unobserved ones).
+    
+    Manually set all_properties_path=None to ignore scaling (not set to default argument to avoid confusions) 
     """
     # read data
     df1 = pd.read_csv(initial_observed_properties_path, header=None)
     df2 = pd.read_csv(observation_histories_path, header=None)
     df = pd.concat([df1, df2], axis=0, ignore_index=True)
+    trajectory = df.to_numpy()
     
     # scale with all props
-    all_props = pd.read_csv(all_properties_path).to_numpy()
-    scaler = make_scaler(all_props, d=2)
-    trajectory = df.to_numpy()
-    trajectory = scaler.transform(trajectory)
+    if all_properties_path is not None:
+        all_props = pd.read_csv(all_properties_path).to_numpy()
+        scaler = make_scaler(all_props, d=2)
+        trajectory = scaler.transform(trajectory)
 
     return trajectory
 

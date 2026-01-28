@@ -1,6 +1,5 @@
 import numpy as np
-from sklearn.preprocessing import StandardScaler
-from scipy.spatial import ConvexHull, QhullError
+from scipy.spatial import ConvexHull, Delaunay, QhullError
 from .utils import make_scaler
 
 def stein_discrepancy_trajectory(X: np.ndarray, sigma: float) -> np.ndarray:
@@ -134,3 +133,35 @@ def occupancy_trajectory(X: np.ndarray, X_all: np.ndarray=None, bins: int=50, bo
         occ[k - 1] = np.unique(ids).size / total_cells
 
     return occ
+
+def alpha_concave_hull_area_trajectory(X: np.ndarray, alpha: float=1.0, print_interval: int=None) -> np.ndarray:
+    """
+    Requires: alphashape, shapely
+    Alpha concave hull area trajectory. Ref: https://arxiv.org/abs/1309.7829
+
+    Uses Delaunay triangulation and keeps triangles whose circumradius R satisfies R <= alpha.
+    The alpha-shape area is the sum of areas of kept Delaunay triangles (triangles are interior-disjoint in the triangulation).
+
+    Args:
+        X: (N, 2) array of points.
+        alpha: Circumradius threshold. Larger -> closer to convex hull.
+        qhull_options: Passed to scipy.spatial.Delaunay.
+        treat_degenerate_as_zero: If True, degenerate steps return 0 area instead of raising.
+    """
+    try:
+        import alphashape
+    except:
+        raise AttributeError("To use alpha_concave_hull_area_trajectory(), please install alphashape.")
+    
+    X = np.asarray(X, float)
+    N = X.shape[0]
+    areas = np.zeros(N)
+
+    for k in range(3, N + 1):
+        if print_interval is not None and k % print_interval==0:
+            print(f"Step {k} finished.")
+
+        shape = alphashape.alphashape(X[:k], alpha)
+        areas[k - 1] = shape.area if not shape.is_empty else 0.0
+
+    return areas

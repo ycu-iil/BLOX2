@@ -211,7 +211,7 @@ class Selector(ABC):
             self.passed_times_pred[-1] += (time.perf_counter() - t_u)
 
             if U0.ndim != 2 or U0.shape[0] != len(unobs_ids0):
-                raise ValueError(f"uncertainty must be (m,d_obj) with m=len(unobs_ids0)={len(unobs_ids0)}, got {U0.shape}")
+                raise ValueError(f"uncertainty must be (m, d_obj) with m=len(unobs_ids0)={len(unobs_ids0)}, got {U0.shape}")
 
             unc_by_id = {int(cid): U0[i] for i, cid in enumerate(unobs_ids0)}
 
