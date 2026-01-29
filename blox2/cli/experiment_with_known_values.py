@@ -31,7 +31,8 @@ from blox2 import split_df_by_n_rows, load_features, set_seed
 class ExperimentConfig:
     n_iters: int
     n_suggestions: int
-    seed: int
+    seed_init: int
+    seed_misc: int
 
     features_path: str
     values_path: str
@@ -57,7 +58,8 @@ def _parse_config(d: dict[str, Any]) -> ExperimentConfig:
     cfg = ExperimentConfig(
         n_iters=int(d["n_iters"]),
         n_suggestions=int(d.get("n_suggestions", 1)),
-        seed=int(d.get("seed", 0)),
+        seed_misc=int(d.get("seed_misc", 0)),
+        seed_init=int(d["seed_init"]) if "seed_init" in d else None, 
         features_path=str(d["features_path"]),
         values_path=str(d["values_path"]),
         initial_n_obs=int(d["initial_n_obs"]),
@@ -177,12 +179,19 @@ def run_experiment(config_path: str) -> str:
     _copy_config(config_path, out_dir)
     
     # Set seed
-    set_seed(cfg.seed)
+    set_seed(cfg.seed_misc)
 
     # Load data
     print("Loading data...")
     features_df = load_features(cfg.features_path)
     values_df = pd.read_csv(cfg.values_path)
+    
+    if cfg.seed_init is not None:
+        rng = np.random.default_rng(cfg.seed_init)
+        perm = rng.permutation(len(features_df))
+
+        features_df = features_df.iloc[perm].reset_index(drop=True)
+        values_df = values_df.iloc[perm].reset_index(drop=True)
 
     observed_features, unchecked_features = split_df_by_n_rows(features_df, cfg.initial_n_obs)
     observed_values, unchecked_values = split_df_by_n_rows(values_df, cfg.initial_n_obs)
