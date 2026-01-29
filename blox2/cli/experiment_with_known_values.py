@@ -31,7 +31,7 @@ from blox2 import split_df_by_n_rows, load_features, set_seed
 class ExperimentConfig:
     n_iters: int
     n_suggestions: int
-    seed_init: int
+    seed_init: int | list[int] | None
     seed_misc: int
 
     features_path: str
@@ -59,7 +59,7 @@ def _parse_config(d: dict[str, Any]) -> ExperimentConfig:
         n_iters=int(d["n_iters"]),
         n_suggestions=int(d.get("n_suggestions", 1)),
         seed_misc=int(d.get("seed_misc", 0)),
-        seed_init=int(d["seed_init"]) if "seed_init" in d else None, 
+        seed_init=d["seed_init"] if "seed_init" in d else None, 
         features_path=str(d["features_path"]),
         values_path=str(d["values_path"]),
         initial_n_obs=int(d["initial_n_obs"]),
@@ -93,9 +93,7 @@ def _make_output_dir(output_dir: str, config_path: str) -> str:
     config_name = Path(config_path).stem
     ts = _dt.datetime.now().strftime("%m-%d_%H%M%S")
     out_dir = os.path.join(output_dir, f"{ts}_{config_name}")
-    scatter_out_dir = os.path.join(out_dir, "scatter")
     os.makedirs(out_dir, exist_ok=True)
-    os.makedirs(scatter_out_dir, exist_ok=True)
     return out_dir
 
 def _copy_config(config_path: str, out_dir: str) -> None:
@@ -133,25 +131,10 @@ def _write_time_consumption(out_dir: str, selector) -> None:
     plt.savefig(os.path.join(out_dir, "time_consumption.png"))
     plt.close()
 
-# def _plot_stein_discrepancy(out_dir: str, observation_history: np.ndarray, fixed_data_for_scaler: np.ndarray, sigma: float, initial_n_obs: int, cutoff: int=0):
-#     sd_trajectory = stein_discrepancy_trajectory(observation_history, scale=fixed_data_for_scaler, sigma=sigma,)
-
-#     y = sd_trajectory[initial_n_obs + cutoff:]
-#     x = np.arange(cutoff + 1, cutoff + 1 + len(y))
-
-#     plt.figure()
-#     plt.plot(x, y)
-#     plt.xscale("log", base=10)
-#     plt.xlabel("Number of samplings")
-#     plt.ylabel("Stein discrepancy")
-#     plt.grid()
-#     plt.tight_layout()
-#     plt.savefig(os.path.join(out_dir, f"stein_discrepancy_s={sigma}.png"))
-#     plt.close()
-
-#     np.savetxt(os.path.join(out_dir, f"stein_discrepancy_history_s={sigma}.csv"), sd_trajectory[initial_n_obs:], delimiter=",",)
-
 def _plot_scatter(out_dir: str, observation_history: np.ndarray, initial_n_obs: int, intervals: list[int], x_label: str, y_label: str):
+    scatter_dir = os.path.join(out_dir, "scatter")
+    os.makedirs(scatter_dir, exist_ok=True)
+    
     for n in intervals:
         if n <= 0:
             continue
@@ -171,25 +154,28 @@ def _plot_scatter(out_dir: str, observation_history: np.ndarray, initial_n_obs: 
         plt.savefig(os.path.join(out_dir, "scatter", f"scatter_{n}.png"))
         plt.close()
 
-def run_experiment(config_path: str) -> str:
-    cfg_raw = _load_yaml(config_path)
-    cfg = _parse_config(cfg_raw)
+def _normalize_seed_init(seed_init) -> list[int | None]:
+    if seed_init is None:
+        return [None]
+    if isinstance(seed_init, int):
+        return [int(seed_init)]
+    if isinstance(seed_init, (list, tuple)):
+        return [None if s is None else int(s) for s in seed_init]
+    raise TypeError(f"seed_init must be int | list[int] | None, got {type(seed_init)}")
 
-    out_dir = _make_output_dir(cfg.output_dir, config_path)
+def _run_experiment_for_one_initial_points(config_path: str, cfg, seed_init: int | None, out_dir: str) -> str:
     _copy_config(config_path, out_dir)
-    
-    # Set seed
     set_seed(cfg.seed_misc)
 
     # Load data
     print("Loading data...")
     features_df = load_features(cfg.features_path)
     values_df = pd.read_csv(cfg.values_path)
-    
-    if cfg.seed_init is not None:
-        rng = np.random.default_rng(cfg.seed_init)
-        perm = rng.permutation(len(features_df))
 
+    # Shuffle initial observation
+    if seed_init is not None:
+        rng = np.random.default_rng(seed_init)
+        perm = rng.permutation(len(features_df))
         features_df = features_df.iloc[perm].reset_index(drop=True)
         values_df = values_df.iloc[perm].reset_index(drop=True)
 
@@ -209,6 +195,7 @@ def run_experiment(config_path: str) -> str:
         verbose_plot_dir = os.path.join(out_dir, "verbose_plots")
     else:
         verbose_plot_dir = None
+        
     selector = selector_class(observed_features, observed_values, unchecked_features, predictor, verbose_plot_dir=verbose_plot_dir, **cfg.selector_args)
 
     # Main loop
@@ -219,19 +206,14 @@ def run_experiment(config_path: str) -> str:
         ids = selector.next_candidates(n=cfg.n_suggestions)
         for cid in ids:
             selector.observe(cid, get_true_value(cid))
-
+            
         if (i + 1) % cfg.report_interval == 0:
             print(f"{(i+1) * cfg.n_suggestions} candidates suggested. Passed time: {time.perf_counter() - t0:.3f} sec", flush=True)
 
     # Record results
     _write_candidate_history_csv(out_dir, selector)
     observation_history = _write_observation_csvs(out_dir, selector)
-
-    # Fixed scaling (uses all property values)
-    # fixed_data_for_scaler = np.vstack([observed_values.to_numpy(dtype=float, copy=False), unchecked_values.to_numpy(dtype=float, copy=False)])
-
     _write_time_consumption(out_dir, selector)
-    # _plot_stein_discrepancy(out_dir=out_dir, observation_history=observation_history, fixed_data_for_scaler=fixed_data_for_scaler, sigma=cfg.sigma, initial_n_obs=selector.initial_n_obs, cutoff=cfg.sd_plot_cutoff)
 
     # Scatter
     x_label = observed_values.columns[0] if len(observed_values.columns) > 0 else "obj0"
@@ -240,6 +222,29 @@ def run_experiment(config_path: str) -> str:
 
     print(f"Saved results to: {out_dir}")
     return out_dir
+
+def run_experiment(config_path: str) -> str:
+    cfg_raw = _load_yaml(config_path)
+    cfg = _parse_config(cfg_raw)
+
+    seeds = _normalize_seed_init(cfg.seed_init)
+    parent_out_dir = _make_output_dir(cfg.output_dir, config_path)
+    _copy_config(config_path, parent_out_dir)
+
+    out_dirs: list[str] = []
+    for seed_init in seeds:
+        if seed_init is None:
+            sub = "no_shuffle"
+        else:
+            sub = f"seed_init_{seed_init}"
+        out_dir = str(Path(parent_out_dir) / sub)
+        os.makedirs(out_dir, exist_ok=True)
+
+        print(f"\n=== seed_init: {seed_init} ===")
+        out_dirs.append(_run_experiment_for_one_initial_points(config_path, cfg, seed_init, out_dir))
+
+    print(f"\nAll done. Parent dir: {parent_out_dir}")
+    return parent_out_dir
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="blox2")
