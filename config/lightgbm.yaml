@@ -1,9 +1,10 @@
-n_iters: 100
+n_iters: 2000
 n_suggestions: 1
 
 features_path: "data/zinc_dft/feature_list_mfp2048_rdd.npz"
 values_path: "data/zinc_dft/properties.csv"
 initial_n_obs: 10
+seed_init: [0,1,2,3,4]
 
 predictor_class: LightGBMPredictor
 predictor_args:
@@ -12,17 +13,15 @@ predictor_args:
 
 selector_class: SteinNoveltySelector
 selector_args:
-  sigma:
-    - [1, 3.0]
-    - [30, 1.0]
+  sigma: 1
   normalize_features: false
-  value_normalization: default
+  value_normalization: before_pred
   chunk_size: 512
   use_distribution: false
   # pooling: "mean"
-  pred_clip:
-    - [0, null]
-    - [0, null]
+  # pred_clip:
+  #   - [0, null]
+  #   - [0, null]
 
 report_interval: 50
 scatter_plot_intervals: [2, 5, 20, 50, 200, 500, 2000, 5000, 20000, 50000]
