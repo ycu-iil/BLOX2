@@ -22,6 +22,8 @@ class SteinNoveltySelector(Selector):
         self._use_distribution = use_distribution
         self._use_uncertainty = use_uncertainty
         self.uncertainty_ratio = uncertainty_ratio
+        if uncertainty_ratio > 1:
+            raise ValueError("'uncertainty_ratio' must be <= 1.0.")
         self.uncertainty_aggregation_type = uncertainty_aggregation_type
         self.print_uncertainty = print_uncertainty
         self.compare_selection_time = compare_selection_time
@@ -118,9 +120,9 @@ class SteinNoveltySelector(Selector):
 
                     # fixed z-score for Stein novelty using first-chunk stats
                     z_scores = (scores - sn_m) / sn_s
-
+                        
                     # combine
-                    combined = z_scores + self.uncertainty_ratio * uc_z
+                    combined = (1 - self.uncertainty_ratio) * z_scores + self.uncertainty_ratio * uc_z
                     j = np.argmax(combined)
                     score_j = combined[j]
                 else:
