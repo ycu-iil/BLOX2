@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import numpy as np
 from scipy.spatial import ConvexHull, Delaunay, QhullError
 from .utils import make_scaler
@@ -165,3 +166,193 @@ def alpha_concave_hull_area_trajectory(X: np.ndarray, alpha: float=1.0, print_in
         areas[k - 1] = shape.area if not shape.is_empty else 0.0
 
     return areas
+
+def _buffer_union_geometry(pts: np.ndarray, radius: float, resolution: int=32, cap_style: int=1, join_style: int=1):
+    """
+    Build the union of circular buffers around points.
+
+    Args:
+        pts : Array of points of shape (k, 2).
+        radius : Buffer radius (same units as pts).
+        resolution : Buffer resolution (higher -> smoother circle, slower).
+        cap_style : Shapely cap style (1=round, 2=flat, 3=square).
+        join_style : Shapely join style (1=round, 2=mitre, 3=bevel).
+
+    Returns:
+        shapely geometry: Polygon or MultiPolygon representing the union.
+    """
+    try:
+        from shapely.geometry import Point, Polygon
+        from shapely.ops import unary_union
+    except Exception as e:
+        raise ImportError("This code requires shapely. Install with `pip install shapely`.") from e
+    pts = np.asarray(pts, dtype=float)
+    if pts.size == 0:
+        return Polygon() # empty polygon
+
+    if radius < 0:
+        raise ValueError(f"radius must be >= 0, got {radius}")
+
+    # Create buffers for each point and union them.
+    geoms = [Point(float(x), float(y)).buffer(radius, resolution=resolution, cap_style=cap_style, join_style=join_style) for x, y in pts]
+    return unary_union(geoms)
+
+
+def _iter_polygons(geom):
+    """Yield polygons from Polygon / MultiPolygon."""
+    try:
+        from shapely.geometry import Polygon, MultiPolygon
+        from shapely.ops import unary_union
+    except Exception as e:
+        raise ImportError("This code requires shapely. Install with `pip install shapely`.") from e
+    
+    if geom.is_empty:
+        return
+    if isinstance(geom, Polygon):
+        yield geom
+    elif isinstance(geom, MultiPolygon):
+        for g in geom.geoms:
+            yield g
+    else:
+        if hasattr(geom, "geoms"):
+            for g in geom.geoms:
+                yield from _iter_polygons(g)
+
+def buffer_union_area_trajectory(X: np.ndarray, radius: float, resolution: int=32, cap_style: int=1, join_style: int=1, start_k: int=1) -> np.ndarray:
+    """
+    Compute area trajectory of union-of-buffers over prefixes of X.
+
+    Args:
+        X : Input points of shape (N, 2). Interpreted as a trajectory prefix: X[:k].
+        radius : Buffer radius around each point.
+        resolution : Buffer resolution (higher -> smoother circle, slower).
+        cap_style : Shapely cap style (1=round, 2=flat, 3=square).
+        join_style : Shapely join style (1=round, 2=mitre, 3=bevel).
+        start_k : First k to start computing from (default 1). For k < start_k -> 0.
+
+    Returns:
+        np.ndarray: Areas of length N; areas[k-1] is the union area of buffers of X[:k].
+    """
+    N = X.shape[0]
+    areas = np.zeros(N, dtype=float)
+
+    if N == 0:
+        return areas
+
+    if start_k < 1 or start_k > N:
+        raise ValueError(f"start_k must be in [1, N], got {start_k} with N={N}")
+
+    for k in range(start_k, N + 1):
+        geom = _buffer_union_geometry(X[:k], radius, resolution=resolution, cap_style=cap_style, join_style=join_style)
+        areas[k - 1] = float(getattr(geom, "area", 0.0))
+
+    return areas
+
+def plot_buffer_union(X: np.ndarray, radius: float, k: int=None, ax=None, resolution: int=32, cap_style: int=1, join_style: int=1,
+    show_points: bool=True, show_boundary: bool=True, show_fill: bool=True,
+    fill_alpha: float=0.25, boundary_lw: float=2.0,
+    point_kwargs: dict=None, boundary_kwargs: dict=None, fill_kwargs: dict=None, equal_aspect: bool=True) -> tuple:
+    """
+    Visualize the union-of-buffers region for X[:k].
+
+    Args:
+        X : Input points of shape (N, 2).
+        radius : Buffer radius.
+        k : If given, plot using only the prefix X[:k]. If None, use all points.
+        ax : Matplotlib axes. If None, creates a new figure+axes.
+        resolution : Buffer resolution for circles.
+        cap_style : Shapely cap style (1=round, 2=flat, 3=square).
+        join_style : Shapely join style (1=round, 2=mitre, 3=bevel).
+        show_points : Whether to scatter points.
+        show_boundary : Whether to draw polygon boundary lines.
+        show_fill : Whether to fill polygon interiors.
+        fill_alpha : Alpha for fill.
+        boundary_lw : Line width for boundaries.
+        point_kwargs : kwargs forwarded to ax.scatter.
+        boundary_kwargs : kwargs forwarded to ax.plot for boundaries.
+        fill_kwargs : kwargs forwarded to ax.fill for fills.
+        equal_aspect : If True, set ax.set_aspect("equal", adjustable="box").
+
+    Returns:
+        (ax, geom): Matplotlib axes and the shapely union geometry plotted.
+    """
+    N = X.shape[0]
+
+    if k is None:
+        k = N
+    if not (0 <= k <= N):
+        raise ValueError(f"k must be in [0, N], got {k} with N={N}")
+
+    pts = X[:k]
+
+    if ax is None:
+        _, ax = plt.subplots()
+
+    geom = _buffer_union_geometry(pts, radius, resolution=resolution, cap_style=cap_style, join_style=join_style)
+
+    # Defaults
+    if point_kwargs is None:
+        point_kwargs = dict(s=12)
+    if boundary_kwargs is None:
+        boundary_kwargs = dict()
+    if fill_kwargs is None:
+        fill_kwargs = dict()
+
+    if not geom.is_empty:
+        for poly in _iter_polygons(geom):
+            # Fill exterior
+            if show_fill:
+                x, y = poly.exterior.xy
+                ax.fill(x, y, alpha=fill_alpha, **fill_kwargs)
+                for ring in poly.interiors:
+                    hx, hy = ring.xy
+                    if show_boundary:
+                        ax.plot(hx, hy, lw=boundary_lw, **boundary_kwargs)
+
+            # Boundary exterior
+            if show_boundary:
+                x, y = poly.exterior.xy
+                ax.plot(x, y, lw=boundary_lw, **boundary_kwargs)
+
+    # Plot points
+    if show_points and k > 0:
+        ax.scatter(pts[:, 0], pts[:, 1], **point_kwargs)
+
+    if equal_aspect:
+        ax.set_aspect("equal", adjustable="box")
+
+    ax.set_title(f"Union of buffers (radius={radius})")
+    return ax, geom
+
+
+def plot_buffer_union_trajectory_snapshot(X: np.ndarray,radius: float, ks: int | list[int]=[10, 50, 200],
+    resolution: int=32, cap_style: int=1, join_style: int=1, figsize: tuple[float, float] = (12, 4)) -> plt.Figure:
+    """
+    Plot multiple snapshots of union-of-buffers for different k values.
+
+    Args:
+        X : Input points of shape (N,2).
+        radius : Buffer radius.
+        ks : One or more k values to visualize.
+        resolution : Buffer resolution.
+        cap_style : Shapely cap style.
+        join_style : Shapely join style.
+        figsize : Figure size.
+
+    Returns:
+        matplotlib.figure.Figure: The created figure.
+    """
+    if isinstance(ks, int):
+        ks = (ks,)
+    ks = tuple(int(v) for v in ks)
+
+    fig, axes = plt.subplots(1, len(ks), figsize=figsize)
+    if len(ks) == 1:
+        axes = [axes]
+
+    for ax, k in zip(axes, ks):
+        plot_buffer_union(X, radius=radius, k=k, ax=ax, resolution=resolution, cap_style=cap_style, join_style=join_style,
+            show_points=True, show_boundary=True, show_fill=True, fill_alpha=0.25, boundary_lw=2.0)
+
+    fig.tight_layout()
+    return fig
