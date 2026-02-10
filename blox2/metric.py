@@ -167,7 +167,7 @@ def alpha_concave_hull_area_trajectory(X: np.ndarray, alpha: float=1.0, print_in
 
     return areas
 
-def _buffer_union_geometry(pts: np.ndarray, radius: float, resolution: int=32, cap_style: int=1, join_style: int=1):
+def _buffer_union_geometry(pts: np.ndarray, radius: float, resolution: int=4, cap_style: int=1, join_style: int=1):
     """
     Build the union of circular buffers around points.
 
@@ -218,7 +218,7 @@ def _iter_polygons(geom):
             for g in geom.geoms:
                 yield from _iter_polygons(g)
 
-def buffer_union_area_trajectory(X: np.ndarray, radius: float, resolution: int=32, cap_style: int=1, join_style: int=1, start_k: int=1) -> np.ndarray:
+def buffer_union_area_trajectory(X: np.ndarray, radius: float, resolution: int=4, cap_style: int=1, join_style: int=1, start_k: int=1) -> np.ndarray:
     """
     Compute area trajectory of union-of-buffers over prefixes of X.
 
@@ -248,7 +248,7 @@ def buffer_union_area_trajectory(X: np.ndarray, radius: float, resolution: int=3
 
     return areas
 
-def plot_buffer_union(X: np.ndarray, radius: float, k: int=None, ax=None, resolution: int=32, cap_style: int=1, join_style: int=1,
+def plot_buffer_union(X: np.ndarray, radius: float, k: int=None, ax=None, resolution: int=4, cap_style: int=1, join_style: int=1,
     show_points: bool=True, show_boundary: bool=True, show_fill: bool=True,
     fill_alpha: float=0.25, boundary_lw: float=2.0,
     point_kwargs: dict=None, boundary_kwargs: dict=None, fill_kwargs: dict=None, equal_aspect: bool=True) -> tuple:
@@ -326,7 +326,7 @@ def plot_buffer_union(X: np.ndarray, radius: float, k: int=None, ax=None, resolu
 
 
 def plot_buffer_union_trajectory_snapshot(X: np.ndarray,radius: float, ks: int | list[int]=[10, 50, 200],
-    resolution: int=32, cap_style: int=1, join_style: int=1, figsize: tuple[float, float] = (12, 4)) -> plt.Figure:
+    resolution: int=4, cap_style: int=1, join_style: int=1, figsize: tuple[float, float] = (12, 4)) -> plt.Figure:
     """
     Plot multiple snapshots of union-of-buffers for different k values.
 
