@@ -218,9 +218,10 @@ def _iter_polygons(geom):
             for g in geom.geoms:
                 yield from _iter_polygons(g)
 
-def buffer_union_area_trajectory(X: np.ndarray, radius: float, resolution: int=4, cap_style: int=1, join_style: int=1, start_k: int=1) -> np.ndarray:
+def buffer_union_area_trajectory(X: np.ndarray, radius: float, resolution: int=4, cap_style: int=1, join_style: int=1, start_k: int=1, step: int=1) -> np.ndarray:
     """
-    Compute area trajectory of union-of-buffers over prefixes of X.
+    Compute area trajectory of union-of-buffers over prefixes of X,
+    evaluating the geometry every `step` points.
 
     Args:
         X : Input points of shape (N, 2). Interpreted as a trajectory prefix: X[:k].
@@ -229,22 +230,41 @@ def buffer_union_area_trajectory(X: np.ndarray, radius: float, resolution: int=4
         cap_style : Shapely cap style (1=round, 2=flat, 3=square).
         join_style : Shapely join style (1=round, 2=mitre, 3=bevel).
         start_k : First k to start computing from (default 1). For k < start_k -> 0.
+        step : Compute geometry every `step` points (default 1).
 
     Returns:
-        np.ndarray: Areas of length N; areas[k-1] is the union area of buffers of X[:k].
+        np.ndarray:
+            Areas of length N.
+            areas[k-1] is the (possibly held) union area of buffers of X[:k].
     """
+    X = np.asarray(X, dtype=float)
+    if X.ndim != 2 or X.shape[1] != 2:
+        raise ValueError(f"X must be shape (N,2), got {X.shape}")
+
     N = X.shape[0]
     areas = np.zeros(N, dtype=float)
 
     if N == 0:
         return areas
-
     if start_k < 1 or start_k > N:
         raise ValueError(f"start_k must be in [1, N], got {start_k} with N={N}")
+    if step < 1:
+        raise ValueError(f"step must be >= 1, got {step}")
+
+    last_area = 0.0
 
     for k in range(start_k, N + 1):
-        geom = _buffer_union_geometry(X[:k], radius, resolution=resolution, cap_style=cap_style, join_style=join_style)
-        areas[k - 1] = float(getattr(geom, "area", 0.0))
+        if (k - start_k) % step == 0:
+            geom = _buffer_union_geometry(
+                X[:k],
+                radius,
+                resolution=resolution,
+                cap_style=cap_style,
+                join_style=join_style,
+            )
+            last_area = float(getattr(geom, "area", 0.0))
+
+        areas[k - 1] = last_area
 
     return areas
 
@@ -323,36 +343,3 @@ def plot_buffer_union(X: np.ndarray, radius: float, k: int=None, ax=None, resolu
 
     ax.set_title(f"Union of buffers (radius={radius})")
     return ax, geom
-
-
-def plot_buffer_union_trajectory_snapshot(X: np.ndarray,radius: float, ks: int | list[int]=[10, 50, 200],
-    resolution: int=4, cap_style: int=1, join_style: int=1, figsize: tuple[float, float] = (12, 4)) -> plt.Figure:
-    """
-    Plot multiple snapshots of union-of-buffers for different k values.
-
-    Args:
-        X : Input points of shape (N,2).
-        radius : Buffer radius.
-        ks : One or more k values to visualize.
-        resolution : Buffer resolution.
-        cap_style : Shapely cap style.
-        join_style : Shapely join style.
-        figsize : Figure size.
-
-    Returns:
-        matplotlib.figure.Figure: The created figure.
-    """
-    if isinstance(ks, int):
-        ks = (ks,)
-    ks = tuple(int(v) for v in ks)
-
-    fig, axes = plt.subplots(1, len(ks), figsize=figsize)
-    if len(ks) == 1:
-        axes = [axes]
-
-    for ax, k in zip(axes, ks):
-        plot_buffer_union(X, radius=radius, k=k, ax=ax, resolution=resolution, cap_style=cap_style, join_style=join_style,
-            show_points=True, show_boundary=True, show_fill=True, fill_alpha=0.25, boundary_lw=2.0)
-
-    fig.tight_layout()
-    return fig
