@@ -341,5 +341,5 @@ def plot_buffer_union(X: np.ndarray, radius: float, k: int=None, ax=None, resolu
     if equal_aspect:
         ax.set_aspect("equal", adjustable="box")
 
-    ax.set_title(f"Union of buffers (radius={radius})")
+    ax.set_title(f"Union of buffers (ε={radius})")
     return ax, geom
