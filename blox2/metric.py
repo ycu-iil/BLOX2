@@ -220,51 +220,59 @@ def _iter_polygons(geom):
 
 def buffer_union_area_trajectory(X: np.ndarray, radius: float, resolution: int=4, cap_style: int=1, join_style: int=1, start_k: int=1, step: int=1) -> np.ndarray:
     """
-    Compute area trajectory of union-of-buffers over prefixes of X,
-    evaluating the geometry every `step` points.
+    Compute area trajectory of union-of-buffers over prefixes of X.
 
     Args:
-        X : Input points of shape (N, 2). Interpreted as a trajectory prefix: X[:k].
+        X : Input points of shape (N, 2). Interpreted as prefixes: X[:k].
         radius : Buffer radius around each point.
         resolution : Buffer resolution (higher -> smoother circle, slower).
         cap_style : Shapely cap style (1=round, 2=flat, 3=square).
         join_style : Shapely join style (1=round, 2=mitre, 3=bevel).
         start_k : First k to start computing from (default 1). For k < start_k -> 0.
-        step : Compute geometry every `step` points (default 1).
-
-    Returns:
-        np.ndarray:
-            Areas of length N.
-            areas[k-1] is the (possibly held) union area of buffers of X[:k].
+        step: Calculation interval.
     """
+    try:
+        from shapely.geometry.base import BaseGeometry
+        from shapely.geometry import Point
+        from shapely.ops import unary_union
+    except Exception as e:
+        raise ImportError("This code requires shapely. Install with `pip install shapely`.") from e
+
     X = np.asarray(X, dtype=float)
     if X.ndim != 2 or X.shape[1] != 2:
         raise ValueError(f"X must be shape (N,2), got {X.shape}")
 
     N = X.shape[0]
     areas = np.zeros(N, dtype=float)
-
     if N == 0:
         return areas
+
     if start_k < 1 or start_k > N:
         raise ValueError(f"start_k must be in [1, N], got {start_k} with N={N}")
     if step < 1:
         raise ValueError(f"step must be >= 1, got {step}")
 
+    union_geom: BaseGeometry = None
     last_area = 0.0
+    last_added_i = start_k - 1
 
-    for k in range(start_k, N + 1):
-        if (k - start_k) % step == 0:
-            geom = _buffer_union_geometry(
-                X[:k],
-                radius,
-                resolution=resolution,
-                cap_style=cap_style,
-                join_style=join_style,
-            )
-            last_area = float(getattr(geom, "area", 0.0))
+    for i in range(N):
+        k = i + 1
+        if k < start_k:
+            areas[i] = 0.0
+            continue
 
-        areas[k - 1] = last_area
+        do_update = ((k - start_k) % step == 0) or (k == N)
+        if do_update:
+            pts = X[last_added_i : i + 1] # Add points from last_added_i .. i inclusive
+            buffers = [Point(px, py).buffer(radius, resolution=resolution, cap_style=cap_style, join_style=join_style) for px, py in pts]
+            batch = unary_union(buffers) # union within the batch first
+            union_geom = batch if union_geom is None else union_geom.union(batch)
+
+            last_added_i = i + 1
+            last_area = float(getattr(union_geom, "area", 0.0))
+
+        areas[i] = last_area
 
     return areas
 
