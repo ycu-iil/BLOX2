@@ -59,6 +59,10 @@ class SteinNoveltySelector(Selector):
             Y = np.asfortranarray(Y) # enforce Fortran order to avoid selection-time bloat (tested)
         else:
             Y = Y_full
+            
+        if self._use_batch_penalty:
+            self._bp_mean = None
+            self._bp_std = None
 
         best_id = -1
         best_score = -np.inf
@@ -135,7 +139,17 @@ class SteinNoveltySelector(Selector):
                     
                 if self._use_batch_penalty and len(self.temp_added_ids) > 0:
                     chunk_ids = unobs_ids[s:e].astype(int)
-                    final_scores = final_scores - self.batch_penalty(chunk_ids)
+
+                    raw_penalty = self.batch_penalty(chunk_ids)
+
+                    if self._bp_mean is None:
+                        self._bp_mean = raw_penalty.mean()
+                        self._bp_std = raw_penalty.std()
+                        if self._bp_std <= 1e-12:
+                            self._bp_std = 1.0
+                            
+                    inv_z = (raw_penalty - self._bp_mean) / self._bp_std
+                    final_scores = final_scores - self.batch_penalty_weight * inv_z
                     
                 j = np.argmax(final_scores)
                 score_j = final_scores[j]
@@ -174,19 +188,8 @@ class SteinNoveltySelector(Selector):
         d2 = np.sum((Xc[:, None, :] - Xs[None, :, :]) ** 2, axis=2)
         min_d = np.sqrt(np.maximum(d2.min(axis=1), 0.0)) # (c,)
 
-        # convert "distance" -> "penalty"
         batch_penalty_eps = 1e-12
-        inv = 1.0 / (min_d + batch_penalty_eps)
-
-        # standardize
-        m = inv.mean()
-        s = inv.std()
-        if s <= 1e-12:
-            s = 1.0
-        inv = (inv - m) / s
-
-        # weight
-        return self.batch_penalty_weight * inv
+        return 1.0 / (min_d + batch_penalty_eps) # convert distance to penalty
 
     def best_id_blox_replication(self, X_pred: np.ndarray, Y_obs: np.ndarray) -> int:
         """For validation purpose. Not used for the selection."""
