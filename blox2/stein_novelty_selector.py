@@ -5,7 +5,7 @@ from .base import Selector, Predictor
 from .utils import stein_novelty_repli
 
 class SteinNoveltySelector(Selector):
-    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, value_normalization: str="default", pred_clip: list[tuple[float | None, float | None]]=None, sigma: float=1.0, n_obs_samples: int=None, chunk_size: int=256, use_uncertainty=False, uncertainty_ratio: float=0.2, uncertainty_aggregation_type: str="mean", print_uncertainty: bool=False, use_distribution: bool=False, pooling: str="mean", use_batch_penalty=False, batch_penalty_weight: float=0.5, batch_penalty_type: str="stein", compare_selection_time=False, verbose_plot_dir: str=None):
+    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, value_normalization: str="default", pred_clip: list[tuple[float | None, float | None]]=None, sigma: float=1.0, n_obs_samples: int=None, chunk_size: int=256, use_uncertainty=False, uncertainty_ratio: float=0.2, uncertainty_aggregation_type: str="mean", print_uncertainty: bool=False, use_distribution: bool=False, pooling: str="mean", use_batch_penalty=False, batch_penalty_weight: float=0.5, batch_penalty_type: str="stein", batch_penalty_stein_sigma: float=1.0, compare_selection_time=False, verbose_plot_dir: str=None):
         """
         Args:
             value_normalization: 
@@ -31,6 +31,7 @@ class SteinNoveltySelector(Selector):
         if not batch_penalty_type in ["stein", "distance"]:
             raise ValueError("'batch_penalty_type' must be 'stein' or 'distance'")
         self.batch_penalty_type = batch_penalty_type
+        self.batch_penalty_stein_sigma2 = batch_penalty_stein_sigma**2
         
         if use_batch_penalty: # standardize input space for batch penalty
             if not normalize_features:
@@ -222,7 +223,7 @@ class SteinNoveltySelector(Selector):
             min_d = np.sqrt(np.maximum(d2.min(axis=1), 0.0)) # (c,)
             return 1.0 / (min_d + eps)
         elif self.batch_penalty_type == "stein":
-            sigma2 = self.squared_sigma()
+            sigma2 = self.batch_penalty_stein_sigma2
             dim = Xc.shape[1]
             stein_scores = np.sum((d2 - dim * sigma2) * np.exp(-d2 / (2.0 * sigma2)), axis=1) # (c,)
             return -stein_scores
