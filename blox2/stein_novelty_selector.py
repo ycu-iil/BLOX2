@@ -5,7 +5,7 @@ from .base import Selector, Predictor
 from .utils import stein_novelty_repli
 
 class SteinNoveltySelector(Selector):
-    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, value_normalization: str="default", pred_clip: list[tuple[float | None, float | None]]=None, sigma: float=1.0, n_obs_samples: int=None, chunk_size: int=256, use_uncertainty=False, uncertainty_ratio: float=0.2, uncertainty_aggregation_type: str="mean", print_uncertainty: bool=False, use_distribution: bool=False, pooling: str="mean", compare_selection_time=False, verbose_plot_dir: str=None):
+    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, value_normalization: str="default", pred_clip: list[tuple[float | None, float | None]]=None, sigma: float=1.0, n_obs_samples: int=None, chunk_size: int=256, use_uncertainty=False, uncertainty_ratio: float=0.2, uncertainty_aggregation_type: str="mean", print_uncertainty: bool=False, use_distribution: bool=False, pooling: str="mean",use_batch_penalty=False, batch_penalty_weight: float=0.5, compare_selection_time=False, verbose_plot_dir: str=None):
         """
         Args:
             value_normalization: 
@@ -21,9 +21,13 @@ class SteinNoveltySelector(Selector):
 
         self._use_distribution = use_distribution
         self._use_uncertainty = use_uncertainty
+        self._use_batch_penalty = use_batch_penalty
+        if use_distribution and use_batch_penalty:
+            raise ValueError("'use_batch_penalty' with 'use_distribution' is not supported.")
         self.uncertainty_ratio = uncertainty_ratio
         if uncertainty_ratio > 1:
             raise ValueError("'uncertainty_ratio' must be <= 1.0.")
+        self.batch_penalty_weight = batch_penalty_weight
         self.uncertainty_aggregation_type = uncertainty_aggregation_type
         self.print_uncertainty = print_uncertainty
         self.compare_selection_time = compare_selection_time
@@ -96,6 +100,13 @@ class SteinNoveltySelector(Selector):
                 dist = np.sum(diff * diff, axis=2) # (c, n_obs)
 
                 scores = np.sum((dist - dim * sigma2) * np.exp(-dist / (2 * sigma2)), axis=1)
+                    
+                if (s == 0) and (self.use_uncertainty() or self._use_batch_penalty):
+                    # fix Stein novelty scaling based on the first chunk
+                    sn_m = scores.mean()
+                    sn_s = scores.std()
+                    if sn_s <= 1e-12:
+                        sn_s = 1.0
 
                 if self.use_uncertainty():
                     if s == 0:
@@ -109,12 +120,6 @@ class SteinNoveltySelector(Selector):
                         U_all_z = (U_all - Um[None, :]) / Us[None, :] # (n_unobs, d_obj)
                         uc_all_z = self._aggregate_uncertainty(U_all_z) # (n_unobs,)
 
-                        # fix Stein novelty scaling based on the first chunk
-                        sn_m = scores.mean()
-                        sn_s = scores.std()
-                        if sn_s <= 1e-12:
-                            sn_s = 1.0
-
                     # slice precomputed aggregated uncertainty (already z-scored per objective then aggregated)
                     uc_z = uc_all_z[s:e]  # (c,)
 
@@ -122,12 +127,18 @@ class SteinNoveltySelector(Selector):
                     z_scores = (scores - sn_m) / sn_s
                         
                     # combine
-                    combined = (1 - self.uncertainty_ratio) * z_scores + self.uncertainty_ratio * uc_z
-                    j = np.argmax(combined)
-                    score_j = combined[j]
+                    final_scores = (1 - self.uncertainty_ratio) * z_scores + self.uncertainty_ratio * uc_z
+                elif self._use_batch_penalty:
+                    final_scores = (scores - sn_m) / sn_s
                 else:
-                    j = np.argmax(scores)
-                    score_j = scores[j]
+                    final_scores = scores
+                    
+                if self._use_batch_penalty and len(self.temp_added_ids) > 0:
+                    chunk_ids = unobs_ids[s:e].astype(int)
+                    final_scores = final_scores - self.batch_penalty(chunk_ids)
+                    
+                j = np.argmax(final_scores)
+                score_j = final_scores[j]
 
                 if score_j > best_score:
                     # for testing
@@ -147,6 +158,35 @@ class SteinNoveltySelector(Selector):
                     print(f"WARNING: Different best point at {len(self.obs_ids)} observed points.")
 
         return best_id
+    
+    def batch_penalty(self, candidate_ids: np.ndarray) -> np.ndarray:
+        if (not self._use_batch_penalty) or (self.batch_penalty_weight <= 0.0):
+            return np.zeros(int(candidate_ids.size), dtype=float)
+
+        cand = np.asarray(candidate_ids, dtype=int).ravel()
+        selected = np.asarray(self.temp_added_ids, dtype=int).ravel() # len(self.temp_added_ids) > 0 if called
+
+        Xc = self.X_all[cand] # (c, d_feat)
+        Xs = self.X_all[selected] # (k, d_feat)
+
+        # min squared distance from each candidate to any selected-in-batch point
+        # (c, k, d) -> (c, k) -> (c,)
+        d2 = np.sum((Xc[:, None, :] - Xs[None, :, :]) ** 2, axis=2)
+        min_d = np.sqrt(np.maximum(d2.min(axis=1), 0.0)) # (c,)
+
+        # convert "distance" -> "penalty"
+        batch_penalty_eps = 1e-12
+        inv = 1.0 / (min_d + batch_penalty_eps)
+
+        # standardize
+        m = inv.mean()
+        s = inv.std()
+        if s <= 1e-12:
+            s = 1.0
+        inv = (inv - m) / s
+
+        # weight
+        return self.batch_penalty_weight * inv
 
     def best_id_blox_replication(self, X_pred: np.ndarray, Y_obs: np.ndarray) -> int:
         """For validation purpose. Not used for the selection."""
