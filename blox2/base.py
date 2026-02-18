@@ -220,7 +220,7 @@ class Selector(ABC):
         pred_raw_by_id = {int(cid): Y_pred0_raw[i] for i, cid in enumerate(unobs_ids0)}
 
         selected_ids = []
-        temp_added_ids = []
+        self.temp_added_ids = []
         selection_time = 0
         
         for _ in range(min(n, int(unobs_ids0.size))):
@@ -244,7 +244,7 @@ class Selector(ABC):
             self.candidate_id_history.append(cid)
 
             selected_ids.append(cid)
-            temp_added_ids.append(cid)
+            self.temp_added_ids.append(cid)
 
             # virtual observation                
             if self.use_distribution():
@@ -260,8 +260,9 @@ class Selector(ABC):
         self.passed_times_selection.append(selection_time)
 
         # revert virtual observation
-        for cid in reversed(temp_added_ids):
+        for cid in reversed(self.temp_added_ids):
             self.unobserve(cid)
+        self.temp_added_ids = []
 
         self.passed_times_total.append(time.perf_counter() - total_t0)
         

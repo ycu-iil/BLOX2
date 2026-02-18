@@ -5,7 +5,7 @@ from .base import Selector, Predictor
 from .utils import stein_novelty_repli
 
 class SteinNoveltySelector(Selector):
-    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, value_normalization: str="default", pred_clip: list[tuple[float | None, float | None]]=None, sigma: float=1.0, n_obs_samples: int=None, chunk_size: int=256, use_uncertainty=False, uncertainty_ratio: float=0.2, uncertainty_aggregation_type: str="mean", print_uncertainty: bool=False, use_distribution: bool=False, pooling: str="mean", compare_selection_time=False, verbose_plot_dir: str=None):
+    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, value_normalization: str="default", pred_clip: list[tuple[float | None, float | None]]=None, sigma: float=1.0, n_obs_samples: int=None, chunk_size: int=256, use_uncertainty=False, uncertainty_ratio: float=0.2, uncertainty_aggregation_type: str="mean", print_uncertainty: bool=False, use_distribution: bool=False, pooling: str="mean", use_batch_penalty=False, batch_penalty_weight: float=0.5, batch_penalty_type: str="stein", batch_penalty_stein_sigma: float | str="auto", batch_penalty_auto_sigma_max_samples: int=10**5, compare_selection_time=False, verbose_plot_dir: str=None):
         """
         Args:
             value_normalization: 
@@ -21,9 +21,53 @@ class SteinNoveltySelector(Selector):
 
         self._use_distribution = use_distribution
         self._use_uncertainty = use_uncertainty
+        self._use_batch_penalty = use_batch_penalty
+        if use_distribution and use_batch_penalty:
+            raise ValueError("'use_batch_penalty' with 'use_distribution' is not supported.")
         self.uncertainty_ratio = uncertainty_ratio
         if uncertainty_ratio > 1:
             raise ValueError("'uncertainty_ratio' must be <= 1.0.")
+        self.batch_penalty_weight = batch_penalty_weight
+        if not batch_penalty_type in ["stein", "distance"]:
+            raise ValueError("'batch_penalty_type' must be 'stein' or 'distance'")
+        self.batch_penalty_type = batch_penalty_type
+        
+        if use_batch_penalty: # standardize input space for batch penalty
+            if not normalize_features:
+                mu = self.X_all.mean(axis=0)
+                sd = self.X_all.std(axis=0)
+                sd = np.where(sd > 1e-12, sd, 1.0) # avoid /0
+                self.X_all_normalized = (self.X_all - mu[None, :]) / sd[None, :]
+            else:
+                self.X_all_normalized = self.X_all
+        
+        if isinstance(batch_penalty_stein_sigma, str):
+            if batch_penalty_stein_sigma != "auto":
+                raise ValueError(f"batch_penalty_stein_sigma must be float or 'auto', got {batch_penalty_stein_sigma}")
+
+            X = self.X_all_normalized
+            n = X.shape[0]
+
+            # subsample pairs if too large (avoid O(N^2))
+            max_pairs = batch_penalty_auto_sigma_max_samples
+            if n * (n - 1) // 2 > max_pairs:
+                rng = np.random.default_rng(0)
+                idx1 = rng.integers(0, n, size=max_pairs)
+                idx2 = rng.integers(0, n, size=max_pairs)
+                mask = idx1 != idx2
+                dists = np.linalg.norm(X[idx1[mask]] - X[idx2[mask]], axis=1)
+            else:
+                diff = X[:, None, :] - X[None, :, :]
+                dists = np.linalg.norm(diff, axis=-1)
+                dists = dists[np.triu_indices(n, k=1)]
+
+            sigma = dists.mean()
+            print(f"[Stein batch penalty] set sigma to {sigma:.6f}")
+
+            self.batch_penalty_stein_sigma2 = sigma ** 2
+        else:
+            self.batch_penalty_stein_sigma2 = batch_penalty_stein_sigma ** 2
+
         self.uncertainty_aggregation_type = uncertainty_aggregation_type
         self.print_uncertainty = print_uncertainty
         self.compare_selection_time = compare_selection_time
@@ -55,6 +99,10 @@ class SteinNoveltySelector(Selector):
             Y = np.asfortranarray(Y) # enforce Fortran order to avoid selection-time bloat (tested)
         else:
             Y = Y_full
+            
+        if self._use_batch_penalty:
+            self._bp_mean = None
+            self._bp_std = None
 
         best_id = -1
         best_score = -np.inf
@@ -96,6 +144,13 @@ class SteinNoveltySelector(Selector):
                 dist = np.sum(diff * diff, axis=2) # (c, n_obs)
 
                 scores = np.sum((dist - dim * sigma2) * np.exp(-dist / (2 * sigma2)), axis=1)
+                    
+                if (s == 0) and (self.use_uncertainty() or self._use_batch_penalty):
+                    # fix Stein novelty scaling based on the first chunk
+                    sn_m = scores.mean()
+                    sn_s = scores.std()
+                    if sn_s <= 1e-12:
+                        sn_s = 1.0
 
                 if self.use_uncertainty():
                     if s == 0:
@@ -109,12 +164,6 @@ class SteinNoveltySelector(Selector):
                         U_all_z = (U_all - Um[None, :]) / Us[None, :] # (n_unobs, d_obj)
                         uc_all_z = self._aggregate_uncertainty(U_all_z) # (n_unobs,)
 
-                        # fix Stein novelty scaling based on the first chunk
-                        sn_m = scores.mean()
-                        sn_s = scores.std()
-                        if sn_s <= 1e-12:
-                            sn_s = 1.0
-
                     # slice precomputed aggregated uncertainty (already z-scored per objective then aggregated)
                     uc_z = uc_all_z[s:e]  # (c,)
 
@@ -122,12 +171,28 @@ class SteinNoveltySelector(Selector):
                     z_scores = (scores - sn_m) / sn_s
                         
                     # combine
-                    combined = (1 - self.uncertainty_ratio) * z_scores + self.uncertainty_ratio * uc_z
-                    j = np.argmax(combined)
-                    score_j = combined[j]
+                    final_scores = (1 - self.uncertainty_ratio) * z_scores + self.uncertainty_ratio * uc_z
+                elif self._use_batch_penalty:
+                    final_scores = (scores - sn_m) / sn_s
                 else:
-                    j = np.argmax(scores)
-                    score_j = scores[j]
+                    final_scores = scores
+                    
+                if self._use_batch_penalty and len(self.temp_added_ids) > 0:
+                    chunk_ids = unobs_ids[s:e].astype(int)
+
+                    raw_penalty = self.batch_penalty(chunk_ids)
+
+                    if self._bp_mean is None:
+                        self._bp_mean = raw_penalty.mean()
+                        self._bp_std = raw_penalty.std()
+                        if self._bp_std <= 1e-12:
+                            self._bp_std = 1.0
+                            
+                    inv_z = (raw_penalty - self._bp_mean) / self._bp_std
+                    final_scores = final_scores - self.batch_penalty_weight * inv_z
+                    
+                j = np.argmax(final_scores)
+                score_j = final_scores[j]
 
                 if score_j > best_score:
                     # for testing
@@ -147,6 +212,49 @@ class SteinNoveltySelector(Selector):
                     print(f"WARNING: Different best point at {len(self.obs_ids)} observed points.")
 
         return best_id
+    
+    def batch_penalty(self, candidate_ids: np.ndarray) -> np.ndarray:
+        if (not self._use_batch_penalty) or (self.batch_penalty_weight <= 0.0):
+            return np.zeros(int(candidate_ids.size), dtype=float)
+
+        cand = np.asarray(candidate_ids, dtype=int).ravel()
+        selected = np.asarray(self.temp_added_ids, dtype=int).ravel() # len(self.temp_added_ids) > 0 if called
+
+        Xc = self.X_all[cand] # (c, d_feat)
+        Xs = self.X_all[selected] # (k, d_feat)
+
+        # min squared distance from each candidate to any selected-in-batch point
+        # (c, k, d) -> (c, k) -> (c,)
+        d2 = np.sum((Xc[:, None, :] - Xs[None, :, :]) ** 2, axis=2)
+        min_d = np.sqrt(np.maximum(d2.min(axis=1), 0.0)) # (c,)
+
+        batch_penalty_eps = 1e-12
+        return 1.0 / (min_d + batch_penalty_eps) # convert distance to penalty
+    
+    def batch_penalty(self, candidate_ids: np.ndarray) -> np.ndarray:
+        if (not self._use_batch_penalty) or (self.batch_penalty_weight <= 0.0):
+            return np.zeros(int(candidate_ids.size), dtype=float)
+
+        cand = np.asarray(candidate_ids, dtype=int).ravel()
+        selected = np.asarray(self.temp_added_ids, dtype=int).ravel() # len(self.temp_added_ids) > 0 if called
+
+        Xc = self.X_all_normalized[cand] # (c, d_feat)
+        Xs = self.X_all_normalized[selected] # (k, d_feat)
+    
+        # pairwise squared distances in input space
+        d2 = np.sum((Xc[:, None, :] - Xs[None, :, :]) ** 2, axis=2) # (c, k)
+        eps = 1e-12
+        
+        if self.batch_penalty_type == "distance":
+            min_d = np.sqrt(np.maximum(d2.min(axis=1), 0.0)) # (c,)
+            return 1.0 / (min_d + eps)
+        elif self.batch_penalty_type == "stein":
+            sigma2 = self.batch_penalty_stein_sigma2
+            dim = Xc.shape[1]
+            stein_scores = np.sum((d2 - dim * sigma2) * np.exp(-d2 / (2.0 * sigma2)), axis=1) # (c,)
+            return -stein_scores
+        else:
+            raise RuntimeError(f"Unexpected batch_penalty_type: {self.batch_penalty_type}")
 
     def best_id_blox_replication(self, X_pred: np.ndarray, Y_obs: np.ndarray) -> int:
         """For validation purpose. Not used for the selection."""
