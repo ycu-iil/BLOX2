@@ -5,7 +5,7 @@ from .base import Selector, Predictor
 from .utils import stein_novelty_repli
 
 class SteinNoveltySelector(Selector):
-    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, value_normalization: str="default", pred_clip: list[tuple[float | None, float | None]]=None, sigma: float=1.0, n_obs_samples: int=None, chunk_size: int=256, use_uncertainty=False, uncertainty_ratio: float=0.2, uncertainty_aggregation_type: str="mean", print_uncertainty: bool=False, use_distribution: bool=False, pooling: str="mean", use_batch_penalty=False, batch_penalty_weight: float=0.5, batch_penalty_type: str="stein", batch_penalty_stein_sigma: float=1.0, compare_selection_time=False, verbose_plot_dir: str=None):
+    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, value_normalization: str="default", pred_clip: list[tuple[float | None, float | None]]=None, sigma: float=1.0, n_obs_samples: int=None, chunk_size: int=256, use_uncertainty=False, uncertainty_ratio: float=0.2, uncertainty_aggregation_type: str="mean", print_uncertainty: bool=False, use_distribution: bool=False, pooling: str="mean", use_batch_penalty=False, batch_penalty_weight: float=0.5, batch_penalty_type: str="stein", batch_penalty_stein_sigma: float | str="auto", batch_penalty_auto_sigma_max_samples: int=10**5, compare_selection_time=False, verbose_plot_dir: str=None):
         """
         Args:
             value_normalization: 
@@ -31,7 +31,6 @@ class SteinNoveltySelector(Selector):
         if not batch_penalty_type in ["stein", "distance"]:
             raise ValueError("'batch_penalty_type' must be 'stein' or 'distance'")
         self.batch_penalty_type = batch_penalty_type
-        self.batch_penalty_stein_sigma2 = batch_penalty_stein_sigma**2
         
         if use_batch_penalty: # standardize input space for batch penalty
             if not normalize_features:
@@ -41,6 +40,33 @@ class SteinNoveltySelector(Selector):
                 self.X_all_normalized = (self.X_all - mu[None, :]) / sd[None, :]
             else:
                 self.X_all_normalized = self.X_all
+        
+        if isinstance(batch_penalty_stein_sigma, str):
+            if batch_penalty_stein_sigma != "auto":
+                raise ValueError(f"batch_penalty_stein_sigma must be float or 'auto', got {batch_penalty_stein_sigma}")
+
+            X = self.X_all_normalized
+            n = X.shape[0]
+
+            # subsample pairs if too large (avoid O(N^2))
+            max_pairs = batch_penalty_auto_sigma_max_samples
+            if n * (n - 1) // 2 > max_pairs:
+                rng = np.random.default_rng(0)
+                idx1 = rng.integers(0, n, size=max_pairs)
+                idx2 = rng.integers(0, n, size=max_pairs)
+                mask = idx1 != idx2
+                dists = np.linalg.norm(X[idx1[mask]] - X[idx2[mask]], axis=1)
+            else:
+                diff = X[:, None, :] - X[None, :, :]
+                dists = np.linalg.norm(diff, axis=-1)
+                dists = dists[np.triu_indices(n, k=1)]
+
+            sigma = dists.mean()
+            print(f"[Stein batch penalty] set sigma to {sigma:.6f}")
+
+            self.batch_penalty_stein_sigma2 = sigma ** 2
+        else:
+            self.batch_penalty_stein_sigma2 = batch_penalty_stein_sigma ** 2
 
         self.uncertainty_aggregation_type = uncertainty_aggregation_type
         self.print_uncertainty = print_uncertainty
