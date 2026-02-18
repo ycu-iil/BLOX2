@@ -5,7 +5,7 @@ from .base import Selector, Predictor
 from .utils import stein_novelty_repli
 
 class SteinNoveltySelector(Selector):
-    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, value_normalization: str="default", pred_clip: list[tuple[float | None, float | None]]=None, sigma: float=1.0, n_obs_samples: int=None, chunk_size: int=256, use_uncertainty=False, uncertainty_ratio: float=0.2, uncertainty_aggregation_type: str="mean", print_uncertainty: bool=False, use_distribution: bool=False, pooling: str="mean", use_batch_penalty=False, batch_penalty_weight: float=0.5, batch_penalty_type: str="stein", batch_penalty_stein_sigma: float | str="auto", batch_penalty_auto_sigma_max_samples: int=10**5, compare_selection_time=False, verbose_plot_dir: str=None):
+    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, value_normalization: str="default", pred_clip: list[tuple[float | None, float | None]]=None, sigma: float=1.0, n_obs_samples: int=None, chunk_size: int=256, use_uncertainty=False, uncertainty_ratio: float=0.2, uncertainty_aggregation_type: str="mean", print_uncertainty: bool=False, use_distribution: bool=False, pooling: str="mean", use_batch_penalty=False, batch_penalty_ratio: float=0.5, batch_penalty_type: str="stein", batch_penalty_stein_sigma: float | str="auto", batch_penalty_auto_sigma_max_samples: int=10**5, compare_selection_time=False, verbose_plot_dir: str=None):
         """
         Args:
             value_normalization: 
@@ -27,7 +27,7 @@ class SteinNoveltySelector(Selector):
         self.uncertainty_ratio = uncertainty_ratio
         if uncertainty_ratio > 1:
             raise ValueError("'uncertainty_ratio' must be <= 1.0.")
-        self.batch_penalty_weight = batch_penalty_weight
+        self.batch_penalty_ratio = batch_penalty_ratio
         if not batch_penalty_type in ["stein", "distance"]:
             raise ValueError("'batch_penalty_type' must be 'stein' or 'distance'")
         self.batch_penalty_type = batch_penalty_type
@@ -188,8 +188,8 @@ class SteinNoveltySelector(Selector):
                         if self._bp_std <= 1e-12:
                             self._bp_std = 1.0
                             
-                    inv_z = (raw_penalty - self._bp_mean) / self._bp_std
-                    final_scores = final_scores - self.batch_penalty_weight * inv_z
+                    penalty = (raw_penalty - self._bp_mean) / self._bp_std
+                    final_scores = (1 - self.batch_penalty_ratio) * final_scores - self.batch_penalty_ratio * penalty # + ratio * (-penalty)
                     
                 j = np.argmax(final_scores)
                 score_j = final_scores[j]
@@ -214,7 +214,7 @@ class SteinNoveltySelector(Selector):
         return best_id
     
     def batch_penalty(self, candidate_ids: np.ndarray) -> np.ndarray:
-        if (not self._use_batch_penalty) or (self.batch_penalty_weight <= 0.0):
+        if (not self._use_batch_penalty) or (self.batch_penalty_ratio <= 0.0):
             return np.zeros(int(candidate_ids.size), dtype=float)
 
         cand = np.asarray(candidate_ids, dtype=int).ravel()
@@ -232,7 +232,7 @@ class SteinNoveltySelector(Selector):
         return 1.0 / (min_d + batch_penalty_eps) # convert distance to penalty
     
     def batch_penalty(self, candidate_ids: np.ndarray) -> np.ndarray:
-        if (not self._use_batch_penalty) or (self.batch_penalty_weight <= 0.0):
+        if (not self._use_batch_penalty) or (self.batch_penalty_ratio <= 0.0):
             return np.zeros(int(candidate_ids.size), dtype=float)
 
         cand = np.asarray(candidate_ids, dtype=int).ravel()
