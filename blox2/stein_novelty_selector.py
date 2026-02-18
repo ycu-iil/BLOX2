@@ -62,7 +62,7 @@ class SteinNoveltySelector(Selector):
                 dists = dists[np.triu_indices(n, k=1)]
 
             sigma = dists.mean()
-            print(f"[Stein batch penalty] set sigma to {sigma:.6f}")
+            print(f"[Stein batch penalty] Set sigma to: {sigma:.6f}")
 
             self.batch_penalty_stein_sigma2 = sigma ** 2
         else:
