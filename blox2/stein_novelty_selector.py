@@ -220,24 +220,6 @@ class SteinNoveltySelector(Selector):
         cand = np.asarray(candidate_ids, dtype=int).ravel()
         selected = np.asarray(self.temp_added_ids, dtype=int).ravel() # len(self.temp_added_ids) > 0 if called
 
-        Xc = self.X_all[cand] # (c, d_feat)
-        Xs = self.X_all[selected] # (k, d_feat)
-
-        # min squared distance from each candidate to any selected-in-batch point
-        # (c, k, d) -> (c, k) -> (c,)
-        d2 = np.sum((Xc[:, None, :] - Xs[None, :, :]) ** 2, axis=2)
-        min_d = np.sqrt(np.maximum(d2.min(axis=1), 0.0)) # (c,)
-
-        batch_penalty_eps = 1e-12
-        return 1.0 / (min_d + batch_penalty_eps) # convert distance to penalty
-    
-    def batch_penalty(self, candidate_ids: np.ndarray) -> np.ndarray:
-        if (not self._use_batch_penalty) or (self.batch_penalty_ratio <= 0.0):
-            return np.zeros(int(candidate_ids.size), dtype=float)
-
-        cand = np.asarray(candidate_ids, dtype=int).ravel()
-        selected = np.asarray(self.temp_added_ids, dtype=int).ravel() # len(self.temp_added_ids) > 0 if called
-
         Xc = self.X_all_normalized[cand] # (c, d_feat)
         Xs = self.X_all_normalized[selected] # (k, d_feat)
     
