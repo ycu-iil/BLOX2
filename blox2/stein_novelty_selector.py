@@ -5,7 +5,7 @@ from .base import Selector, Predictor
 from .utils import stein_novelty_repli
 
 class SteinNoveltySelector(Selector):
-    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, value_normalization: str="default", pred_clip: list[tuple[float | None, float | None]]=None, sigma: float=1.0, n_obs_samples: int=None, chunk_size: int=256, use_uncertainty=False, uncertainty_ratio: float=0.2, uncertainty_aggregation_type: str="mean", print_uncertainty: bool=False, use_distribution: bool=False, pooling: str="mean", use_batch_penalty=False, batch_penalty_ratio: float=0.5, batch_penalty_type: str="stein", batch_penalty_stein_sigma: float | str="auto", batch_penalty_auto_sigma_max_samples: int=10**5, compare_selection_time=False, verbose_plot_dir: str=None):
+    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, value_normalization: str="default", pred_clip: list[tuple[float | None, float | None]]=None, sigma: float=1.0, n_obs_samples: int=None, chunk_size: int=256, use_uncertainty=False, uncertainty_ratio: float=0.2, uncertainty_aggregation_type: str="mean", print_uncertainty: bool=False, use_distribution: bool=False, pooling: str="mean", use_batch_penalty=False, batch_penalty_ratio: float=0.5, batch_penalty_type: str="stein", batch_penalty_stein_sigma: float | str="auto", batch_penalty_auto_sigma_max_samples: int=10**5, batch_penalty_cutoff_ratio: float=0.0, compare_selection_time=False, verbose_plot_dir: str=None):
         """
         Args:
             value_normalization: 
@@ -16,6 +16,7 @@ class SteinNoveltySelector(Selector):
             pred_clip: Valid value range of objectives. This cannot be used with "before_pred".
             n_obs_samples: When the number of observed points are greater than this value, samples n_obs_samples points for Stein novelty calculation instead of using all of the observed points.
             pooling: How to use Stein novelty scores of predicted samples when 'use_distribution'=True. Can be one of: "mean" / "max"
+            batch_penalty_cutoff_ratio: skip batch penalty calculation of bad candidates (per chunk)
         """
         super().__init__(observed_features, observed_values, unobserved_features, predictor, sigma=sigma, normalize_features=normalize_features, value_normalization=value_normalization, pred_clip=pred_clip, verbose_plot_dir=verbose_plot_dir)     
 
@@ -31,6 +32,9 @@ class SteinNoveltySelector(Selector):
         if not batch_penalty_type in ["stein", "distance"]:
             raise ValueError("'batch_penalty_type' must be 'stein' or 'distance'")
         self.batch_penalty_type = batch_penalty_type
+        self.batch_penalty_cutoff_ratio = batch_penalty_cutoff_ratio
+        if not (0.0 <= self.batch_penalty_cutoff_ratio < 1.0):
+            raise ValueError("'batch_penalty_cutoff_ratio' must be in [0, 1).")
         
         if use_batch_penalty: # standardize input space for batch penalty
             if not normalize_features:
@@ -179,17 +183,32 @@ class SteinNoveltySelector(Selector):
                     
                 if self._use_batch_penalty and len(self.temp_added_ids) > 0:
                     chunk_ids = unobs_ids[s:e].astype(int)
+                    c = int(chunk_ids.size)
 
-                    raw_penalty = self.batch_penalty(chunk_ids)
+                    # Skip calculation of bad candidates
+                    cutoff = self.batch_penalty_cutoff_ratio
+                    n_keep = max(1, int(np.ceil(c * (1.0 - cutoff)))) # always keep >= 1
+                    if n_keep >= c:
+                        keep_idx = np.arange(c, dtype=int)
+                    else:
+                        keep_idx = np.argpartition(final_scores, -n_keep)[-n_keep:]
+
+                    raw_penalty_keep = self.batch_penalty(chunk_ids[keep_idx])
 
                     if self._bp_mean is None:
-                        self._bp_mean = raw_penalty.mean()
-                        self._bp_std = raw_penalty.std()
+                        self._bp_mean = raw_penalty_keep.mean()
+                        self._bp_std = raw_penalty_keep.std()
                         if self._bp_std <= 1e-12:
                             self._bp_std = 1.0
-                            
-                    penalty = (raw_penalty - self._bp_mean) / self._bp_std
-                    final_scores = (1 - self.batch_penalty_ratio) * final_scores - self.batch_penalty_ratio * penalty # + ratio * (-penalty)
+
+                    penalty_z = np.empty(c, dtype=float)
+
+                    penalty_skip_z = 1000.0
+                    penalty_z.fill(penalty_skip_z)
+
+                    penalty_z[keep_idx] = (raw_penalty_keep - self._bp_mean) / self._bp_std
+
+                    final_scores = (1 - self.batch_penalty_ratio) * final_scores - self.batch_penalty_ratio * penalty_z # + ratio * (-penalty)
                     
                 j = np.argmax(final_scores)
                 score_j = final_scores[j]
