@@ -1,11 +1,12 @@
 import time
 import numpy as np
 import pandas as pd
+from sklearn.decomposition import PCA
 from .base import Selector, Predictor
 from .utils import stein_novelty_repli
 
 class SteinNoveltySelector(Selector):
-    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, value_normalization: str="default", pred_clip: list[tuple[float | None, float | None]]=None, sigma: float=1.0, n_obs_samples: int=None, chunk_size: int=256, use_uncertainty=False, uncertainty_ratio: float=0.2, uncertainty_aggregation_type: str="mean", print_uncertainty: bool=False, use_distribution: bool=False, pooling: str="mean", use_batch_penalty=False, batch_penalty_ratio: float=0.5, batch_penalty_type: str="stein", batch_penalty_stein_sigma: float | str="auto", batch_penalty_auto_sigma_max_samples: int=10**5, batch_penalty_cutoff_ratio: float=0.0, compare_selection_time=False, verbose_plot_dir: str=None):
+    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, value_normalization: str="default", pred_clip: list[tuple[float | None, float | None]]=None, sigma: float=1.0, n_obs_samples: int=None, chunk_size: int=256, use_uncertainty=False, uncertainty_ratio: float=0.2, uncertainty_aggregation_type: str="mean", print_uncertainty: bool=False, use_distribution: bool=False, pooling: str="mean", use_batch_penalty=False, batch_penalty_ratio: float=0.5, batch_penalty_type: str="stein", batch_penalty_stein_sigma: float | str="auto", batch_penalty_pca_dim: int=None, batch_penalty_auto_sigma_max_samples: int=10**5, batch_penalty_cutoff_ratio: float=0.0, compare_selection_time=False, verbose_plot_dir: str=None):
         """
         Args:
             value_normalization: 
@@ -16,6 +17,7 @@ class SteinNoveltySelector(Selector):
             pred_clip: Valid value range of objectives. This cannot be used with "before_pred".
             n_obs_samples: When the number of observed points are greater than this value, samples n_obs_samples points for Stein novelty calculation instead of using all of the observed points.
             pooling: How to use Stein novelty scores of predicted samples when 'use_distribution'=True. Can be one of: "mean" / "max"
+            batch_penalty_pca_dim: If set to a positive int, apply PCA to X_all_forbatch (input space, used for batch penalty) and reduce its feature dimension to this value.
             batch_penalty_cutoff_ratio: skip batch penalty calculation of bad candidates (per chunk)
         """
         super().__init__(observed_features, observed_values, unobserved_features, predictor, sigma=sigma, normalize_features=normalize_features, value_normalization=value_normalization, pred_clip=pred_clip, verbose_plot_dir=verbose_plot_dir)     
@@ -41,15 +43,25 @@ class SteinNoveltySelector(Selector):
                 mu = self.X_all.mean(axis=0)
                 sd = self.X_all.std(axis=0)
                 sd = np.where(sd > 1e-12, sd, 1.0) # avoid /0
-                self.X_all_normalized = (self.X_all - mu[None, :]) / sd[None, :]
+                self.X_all_forbatch = (self.X_all - mu[None, :]) / sd[None, :]
             else:
-                self.X_all_normalized = self.X_all
+                self.X_all_forbatch = self.X_all
+                
+            if batch_penalty_pca_dim is not None:
+                if batch_penalty_pca_dim <= 0:
+                    raise ValueError("'batch_penalty_pca_dim' must be a positive int or None.")
+
+                if batch_penalty_pca_dim < self.X_all_forbatch.shape[1]:
+                    pca = PCA(n_components=batch_penalty_pca_dim, svd_solver="auto", random_state=0)
+                    self.X_all_forbatch = pca.fit_transform(self.X_all_forbatch) # (n, d)
+                else: # already d <= batch_penalty_pca_dim
+                    pass
         
         if isinstance(batch_penalty_stein_sigma, str):
             if batch_penalty_stein_sigma != "auto":
                 raise ValueError(f"batch_penalty_stein_sigma must be float or 'auto', got {batch_penalty_stein_sigma}")
 
-            X = self.X_all_normalized
+            X = self.X_all_forbatch
             n = X.shape[0]
 
             # subsample pairs if too large (avoid O(N^2))
@@ -183,7 +195,7 @@ class SteinNoveltySelector(Selector):
                     
                 if self._use_batch_penalty and len(self.temp_added_ids) > 0:
                     chunk_ids = unobs_ids[s:e].astype(int)
-                    c = int(chunk_ids.size)
+                    c = chunk_ids.size
 
                     # Skip calculation of bad candidates
                     cutoff = self.batch_penalty_cutoff_ratio
@@ -239,8 +251,8 @@ class SteinNoveltySelector(Selector):
         cand = np.asarray(candidate_ids, dtype=int).ravel()
         selected = np.asarray(self.temp_added_ids, dtype=int).ravel() # len(self.temp_added_ids) > 0 if called
 
-        Xc = self.X_all_normalized[cand] # (c, d_feat)
-        Xs = self.X_all_normalized[selected] # (k, d_feat)
+        Xc = self.X_all_forbatch[cand] # (c, d_feat)
+        Xs = self.X_all_forbatch[selected] # (k, d_feat)
     
         # pairwise squared distances in input space
         d2 = np.sum((Xc[:, None, :] - Xs[None, :, :]) ** 2, axis=2) # (c, k)
