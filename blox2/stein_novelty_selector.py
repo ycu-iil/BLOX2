@@ -56,33 +56,34 @@ class SteinNoveltySelector(Selector):
                     self.X_all_forbatch = pca.fit_transform(self.X_all_forbatch) # (n, d)
                 else: # already d <= batch_penalty_pca_dim
                     pass
-        
-        if isinstance(batch_penalty_stein_sigma, str):
-            if batch_penalty_stein_sigma != "auto":
-                raise ValueError(f"batch_penalty_stein_sigma must be float or 'auto', got {batch_penalty_stein_sigma}")
 
-            X = self.X_all_forbatch
-            n = X.shape[0]
+            if batch_penalty_type == "stein":
+                if isinstance(batch_penalty_stein_sigma, str):
+                    if batch_penalty_stein_sigma != "auto":
+                        raise ValueError(f"batch_penalty_stein_sigma must be float or 'auto', got {batch_penalty_stein_sigma}")
 
-            # subsample pairs if too large (avoid O(N^2))
-            max_pairs = batch_penalty_auto_sigma_max_samples
-            if n * (n - 1) // 2 > max_pairs:
-                rng = np.random.default_rng(0)
-                idx1 = rng.integers(0, n, size=max_pairs)
-                idx2 = rng.integers(0, n, size=max_pairs)
-                mask = idx1 != idx2
-                dists = np.linalg.norm(X[idx1[mask]] - X[idx2[mask]], axis=1)
-            else:
-                diff = X[:, None, :] - X[None, :, :]
-                dists = np.linalg.norm(diff, axis=-1)
-                dists = dists[np.triu_indices(n, k=1)]
+                    X = self.X_all_forbatch
+                    n = X.shape[0]
 
-            sigma = dists.mean()
-            print(f"[Stein batch penalty] Set sigma to: {sigma:.6f}")
+                    # subsample pairs if too large (avoid O(N^2))
+                    max_pairs = batch_penalty_auto_sigma_max_samples
+                    if n * (n - 1) // 2 > max_pairs:
+                        rng = np.random.default_rng(0)
+                        idx1 = rng.integers(0, n, size=max_pairs)
+                        idx2 = rng.integers(0, n, size=max_pairs)
+                        mask = idx1 != idx2
+                        dists = np.linalg.norm(X[idx1[mask]] - X[idx2[mask]], axis=1)
+                    else:
+                        diff = X[:, None, :] - X[None, :, :]
+                        dists = np.linalg.norm(diff, axis=-1)
+                        dists = dists[np.triu_indices(n, k=1)]
 
-            self.batch_penalty_stein_sigma2 = sigma ** 2
-        else:
-            self.batch_penalty_stein_sigma2 = batch_penalty_stein_sigma ** 2
+                    sigma = dists.mean()
+                    print(f"[Stein batch penalty] Set sigma to: {sigma:.6f}")
+
+                    self.batch_penalty_stein_sigma2 = sigma ** 2
+                else:
+                    self.batch_penalty_stein_sigma2 = batch_penalty_stein_sigma ** 2
 
         self.uncertainty_aggregation_type = uncertainty_aggregation_type
         self.print_uncertainty = print_uncertainty
