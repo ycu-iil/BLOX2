@@ -6,7 +6,7 @@ from .base import Selector, Predictor
 from .utils import stein_novelty_repli
 
 class SteinNoveltySelector(Selector):
-    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, value_normalization: str="before_pred", pred_clip: list[tuple[float | None, float | None]]=None, sigma: float=1.0, n_obs_samples: int=None, use_uncertainty=False, uncertainty_ratio: float=0.5, uncertainty_aggregation_type: str="mean", print_uncertainty: bool=False, use_input_stein_novelty: bool=False, use_distribution: bool=False, distribution_pooling_type: str="mean", use_batch_penalty=False, batch_penalty_ratio: float=0.5, batch_penalty_type: str="stein", batch_penalty_stein_sigma: float | str="auto", batch_penalty_pca_dim: int=None, batch_penalty_auto_sigma_max_samples: int=10**5, batch_penalty_cutoff_ratio: float=0.0, batch_penalty_simhash_samples: int=64, chunk_size: int=256, compare_selection_time=False, verbose_plot_dir: str=None):
+    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, value_normalization: str="before_pred", pred_clip: list[tuple[float | None, float | None]]=None, sigma: float=1.0, n_obs_samples: int=None, use_uncertainty=False, uncertainty_ratio: float=0.5, uncertainty_aggregation_type: str="mean", print_uncertainty: bool=False, use_input_stein_novelty: bool=False, input_stein_novelty_ratio: float=0.5, use_distribution: bool=False, distribution_pooling_type: str="mean", use_batch_penalty=False, batch_penalty_ratio: float=0.5, batch_penalty_type: str="stein", batch_penalty_auto_sigma_max_samples: int=10**5, batch_penalty_cutoff_ratio: float=0.0, batch_penalty_simhash_samples: int=64, input_stein_pca_dim: int=None, input_stein_sigma: float | str="auto", chunk_size: int=256, compare_selection_time=False, verbose_plot_dir: str=None):
         """
         Args:
             normalize_features: Whether to normalize input feature values for predictions
@@ -19,9 +19,12 @@ class SteinNoveltySelector(Selector):
             
             n_obs_samples: When the number of observed points are greater than this value, samples n_obs_samples points for Stein novelty calculation instead of using all of the observed points.
             
-            use_uncertainty: Whether to use uncertainty score when selecting candidates.
+            use_uncertainty: Whether to combine uncertainty score when selecting candidates.
             uncertainty_ratio: Maximize (1 - uncertainty_ratio) * standardized Stein novelty + uncertainty_ratio * standardized uncertainty score
             uncertainty_aggregation_type: How to aggregate uncertainty values over features. "mean", "max" or "l2".
+            
+            use_input_stein_novelty: Whether to combine Stein novelty in input feature space when selecting candidates.
+            input_stein_novelty_ratio: Maximize (1 - input_stein_novelty_ratio) * Stein novelty in output space + input_stein_novelty_ratio * Stein novelty in input space
             
             use_distribution: Whether to use distribution ('pred_samples()' defined in predictor class)
             distribution_pooling_type: How to use Stein novelty scores of predicted samples when 'use_distribution'=True. Can be one of: "mean" / "max"
@@ -29,9 +32,11 @@ class SteinNoveltySelector(Selector):
             use_batch_penalty: Whether to use proximity penalty in batch candidates
             batch_penalty_ratio: Maximize (1 - batch_penalty_ratio) * standardized score for non-batch selections (i.e. standardized Stein novelty, + uncertainty if used) + batch_penalty_ratio * (- standardized batch penalty score) when selecting batch candidates.
             batch_penalty_type: 'stein', 'distance', 'simhash' or 'simhash_min_hamming'
-            batch_penalty_pca_dim: If set to a positive int, apply PCA to X_all_forbatch (input space, used for batch penalty) and reduce its feature dimension to this value.
             batch_penalty_cutoff_ratio: skip batch penalty calculation of bad candidates (per chunk)
             batch_penalty_simhash_samples: number of SimHash bits (<= 64). Used when batch_penalty_type="simhash" or "simhash_min_hamming".
+            
+            input_stein_pca_dim: If set to a positive int, apply PCA to X_all_processed (input space, used for batch penalty with 'stein' type or input Stein novelty) and reduce its feature dimension to this value.
+            input_stein_sigma: σ value of Gaussian kernel used for Stein novelty calculation in input space.
             
             chunk_size: The number of candidates in one chunk (for chunked Stein novelty calculation)
             verbose_plot_dir: If set, saves verbose plots of predicted values and chosen points in each selection step.
@@ -43,12 +48,15 @@ class SteinNoveltySelector(Selector):
         self._use_input_stein_novelty = use_input_stein_novelty
         if use_uncertainty and use_input_stein_novelty:
             raise ValueError("'use_input_stein_novelty' with 'use_uncertainty' is not supported.")
+        self.input_stein_novelty_ratio = input_stein_novelty_ratio
+        if not (0.0 <= input_stein_novelty_ratio <= 1.0):
+            raise ValueError("'input_stein_novelty_ratio' must be in [0, 1].")
         self._use_batch_penalty = use_batch_penalty
         if use_distribution and use_batch_penalty:
             raise ValueError("'use_batch_penalty' with 'use_distribution' is not supported.")
         self.uncertainty_ratio = uncertainty_ratio
-        if uncertainty_ratio > 1:
-            raise ValueError("'uncertainty_ratio' must be <= 1.0.")
+        if not (0.0 <= uncertainty_ratio <= 1.0):
+            raise ValueError("'uncertainty_ratio' must be in [0, 1].")
         self.batch_penalty_ratio = batch_penalty_ratio
         if not batch_penalty_type in ["stein", "distance", "simhash", "simhash_min_hamming"]:
             raise ValueError("'batch_penalty_type' must be 'stein', 'distance', 'simhash' or 'simhash_min_hamming'")
@@ -57,53 +65,25 @@ class SteinNoveltySelector(Selector):
         if not (0.0 <= self.batch_penalty_cutoff_ratio < 1.0):
             raise ValueError("'batch_penalty_cutoff_ratio' must be in [0, 1).")
         
-        if use_batch_penalty: # standardize input space for batch penalty
+        if use_batch_penalty or use_input_stein_novelty: # standardize input space for batch penalty or input stein novelty
             if not normalize_features:
                 mu = self.X_all.mean(axis=0)
                 sd = self.X_all.std(axis=0)
                 sd = np.where(sd > 1e-12, sd, 1.0) # avoid /0
-                self.X_all_forbatch = (self.X_all - mu[None, :]) / sd[None, :]
+                self.X_all_processed = (self.X_all - mu[None, :]) / sd[None, :]
             else:
-                self.X_all_forbatch = self.X_all
+                self.X_all_processed = self.X_all
                 
-            if batch_penalty_pca_dim is not None:
-                if batch_penalty_pca_dim <= 0:
+            if input_stein_pca_dim is not None:
+                if input_stein_pca_dim <= 0:
                     raise ValueError("'batch_penalty_pca_dim' must be a positive int or None.")
 
-                if batch_penalty_pca_dim < self.X_all_forbatch.shape[1]:
-                    pca = PCA(n_components=batch_penalty_pca_dim, svd_solver="auto", random_state=0)
-                    self.X_all_forbatch = pca.fit_transform(self.X_all_forbatch) # (n, d)
+                if input_stein_pca_dim < self.X_all_processed.shape[1]:
+                    pca = PCA(n_components=input_stein_pca_dim, svd_solver="auto", random_state=0)
+                    self.X_all_processed = pca.fit_transform(self.X_all_processed) # (n, d)
                 else: # already d <= batch_penalty_pca_dim
                     pass
-
-            if batch_penalty_type == "stein":
-                if isinstance(batch_penalty_stein_sigma, str):
-                    if batch_penalty_stein_sigma != "auto":
-                        raise ValueError(f"batch_penalty_stein_sigma must be float or 'auto', got {batch_penalty_stein_sigma}")
-
-                    X = self.X_all_forbatch
-                    n = X.shape[0]
-
-                    # subsample pairs if too large (avoid O(N^2))
-                    max_pairs = batch_penalty_auto_sigma_max_samples
-                    if n * (n - 1) // 2 > max_pairs:
-                        rng = np.random.default_rng(0)
-                        idx1 = rng.integers(0, n, size=max_pairs)
-                        idx2 = rng.integers(0, n, size=max_pairs)
-                        mask = idx1 != idx2
-                        dists = np.linalg.norm(X[idx1[mask]] - X[idx2[mask]], axis=1)
-                    else:
-                        diff = X[:, None, :] - X[None, :, :]
-                        dists = np.linalg.norm(diff, axis=-1)
-                        dists = dists[np.triu_indices(n, k=1)]
-
-                    sigma = dists.mean()
-                    print(f"[Stein batch penalty] Set sigma to: {sigma:.6f}")
-
-                    self.batch_penalty_stein_sigma2 = sigma ** 2
-                else:
-                    self.batch_penalty_stein_sigma2 = batch_penalty_stein_sigma ** 2
-            elif batch_penalty_type == "simhash" or "simhash_min_hamming":
+            elif batch_penalty_type in ["simhash", "simhash_min_hamming"]:
                 self.batch_penalty_simhash_samples = batch_penalty_simhash_samples
                 if self.batch_penalty_simhash_samples <= 0:
                     raise ValueError("'batch_penalty_simhash_samples' must be a positive int.")
@@ -111,10 +91,38 @@ class SteinNoveltySelector(Selector):
                     raise ValueError("'batch_penalty_simhash_samples' must be <= 64 (packed into uint64).")
                 # precompute simhash codes
                 rng = np.random.default_rng(0)
-                d_feat = self.X_all_forbatch.shape[1]
+                d_feat = self.X_all_processed.shape[1]
                 b = self.batch_penalty_simhash_samples
                 self._simhash_R = rng.standard_normal(size=(d_feat, b)).astype(np.float32, copy=False) # random hyperplanes: (d_feat, b)
-                self._simhash_codes_all = self._simhash_packbits(self.X_all_forbatch @ self._simhash_R) # (n,)
+                self._simhash_codes_all = self._simhash_packbits(self.X_all_processed @ self._simhash_R) # (n,)
+                
+        if (use_batch_penalty and batch_penalty_type == "stein") or use_input_stein_novelty:
+            if isinstance(input_stein_sigma, str):
+                if input_stein_sigma != "auto":
+                    raise ValueError(f"batch_penalty_stein_sigma must be float or 'auto', got {input_stein_sigma}")
+
+                X = self.X_all_processed
+                n = X.shape[0]
+
+                # subsample pairs if too large (avoid O(N^2))
+                max_pairs = batch_penalty_auto_sigma_max_samples
+                if n * (n - 1) // 2 > max_pairs:
+                    rng = np.random.default_rng(0)
+                    idx1 = rng.integers(0, n, size=max_pairs)
+                    idx2 = rng.integers(0, n, size=max_pairs)
+                    mask = idx1 != idx2
+                    dists = np.linalg.norm(X[idx1[mask]] - X[idx2[mask]], axis=1)
+                else:
+                    diff = X[:, None, :] - X[None, :, :]
+                    dists = np.linalg.norm(diff, axis=-1)
+                    dists = dists[np.triu_indices(n, k=1)]
+
+                sigma = dists.mean()
+                print(f"[Stein batch penalty] Set sigma to: {sigma:.6f}")
+
+                self.input_stein_sigma2 = sigma ** 2
+            else:
+                self.input_stein_sigma2 = input_stein_sigma ** 2
 
         self.uncertainty_aggregation_type = uncertainty_aggregation_type
         self.print_uncertainty = print_uncertainty
@@ -221,8 +229,40 @@ class SteinNoveltySelector(Selector):
                     # combine
                     final_scores = (1 - self.uncertainty_ratio) * z_scores + self.uncertainty_ratio * uc_z
                 elif self._use_input_stein_novelty:
-                    # TODO
-                    final_scores = (scores - sn_m) / sn_s
+                    r = self.input_stein_novelty_ratio
+                    X_obs_full = self.X_all_processed[self.obs_ids()]  # (n_obs, d_feat)
+
+                    # apply sampling if set (same as output Stein novelty)
+                    if self.n_obs_samples is not None and self.n_obs_samples > 0 and self.n_obs_samples < n:
+                        X_obs = X_obs_full[idx]
+                        X_obs = np.asfortranarray(X_obs)
+                    else:
+                        X_obs = X_obs_full
+
+                    # candidate features in processed input space for this chunk
+                    chunk_ids = unobs_ids[s:e].astype(int)
+                    Xc_in = self.X_all_processed[chunk_ids] # (c, d_feat)
+
+                    # Stein novelty in input space
+                    sigma2_in = self.input_stein_sigma2
+                    dim_in = Xc_in.shape[1]
+                    diff_in = X_obs[None, :, :] - Xc_in[:, None, :] # (c, n_obs, d_feat)
+                    d2_in = np.sum(diff_in * diff_in, axis=2) # (c, n_obs)
+                    scores_in = np.sum((d2_in - dim_in * sigma2_in) * np.exp(-d2_in / (2.0 * sigma2_in)), axis=1) # (c,)
+
+                    if s == 0:
+                        # fix input Stein novelty scaling based on the first chunk
+                        in_m = scores_in.mean()
+                        in_s = scores_in.std()
+                        if in_s <= 1e-12:
+                            in_s = 1.0
+
+                    # z-scores
+                    z_out = (scores - sn_m) / sn_s
+                    z_in = (scores_in - in_m) / in_s
+
+                    # mix
+                    final_scores = (1 - r) * z_out + r * z_in
                 elif self._use_batch_penalty: # use_batch_penalty but not use_uncertainty or use_input_stein_novelty (cases where final scores are already normalized)
                     final_scores = (scores - sn_m) / sn_s
                 else:
@@ -296,7 +336,7 @@ class SteinNoveltySelector(Selector):
 
             # nearest selected point in Hamming space
             min_ham = ham.min(axis=1) # (c,)
-
+            eps = 1e-12
             penalty = 1.0 / (min_ham + eps) # closer => larger penalty
             return penalty
         elif self.batch_penalty_type == "simhash":
@@ -311,18 +351,18 @@ class SteinNoveltySelector(Selector):
             penalty = np.fromiter((code2cnt.get(int(cc), 0) for cc in cand_codes), dtype=float, count=cand_codes.size)
             return penalty
 
-        Xc = self.X_all_forbatch[cand] # (c, d_feat)
-        Xs = self.X_all_forbatch[selected] # (k, d_feat)
+        Xc = self.X_all_processed[cand] # (c, d_feat)
+        Xs = self.X_all_processed[selected] # (k, d_feat)
     
         # pairwise squared distances in input space
         d2 = np.sum((Xc[:, None, :] - Xs[None, :, :]) ** 2, axis=2) # (c, k)
-        eps = 1e-12
         
         if self.batch_penalty_type == "distance":
             min_d = np.sqrt(np.maximum(d2.min(axis=1), 0.0)) # (c,)
+            eps = 1e-12
             return 1.0 / (min_d + eps)
         elif self.batch_penalty_type == "stein":
-            sigma2 = self.batch_penalty_stein_sigma2
+            sigma2 = self.input_stein_sigma2
             dim = Xc.shape[1]
             stein_scores = np.sum((d2 - dim * sigma2) * np.exp(-d2 / (2.0 * sigma2)), axis=1) # (c,)
             return -stein_scores
