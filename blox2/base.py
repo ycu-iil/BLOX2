@@ -52,10 +52,10 @@ class Selector(ABC):
     def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, sigma: float | list[tuple[int, float]]=1.0, normalize_features: bool=True, value_normalization: str="before_pred", pred_clip: list[tuple[float | None, float | None]]=None, verbose_plot_dir: str=None):
         """
         value_normalization: 
-            - default: apply after prediction, using the scaler fitted before prediction
             - before_pred: fit and apply before prediction
             - after_pred: fit and apply after prediction
-            - disable: diable
+            - mixed: apply after prediction, using the scaler fitted before prediction
+            - diable: disable
         pred_clip: Valid value range of objectives. This cannot be used with "before_pred".
         """
         n_obs = len(observed_features)
@@ -145,7 +145,7 @@ class Selector(ABC):
 
         X_obs = self.X_obs()
         
-        if self.value_normalization == "default":
+        if self.value_normalization == "mixed":
             self.y_scaler = StandardScaler()
             self.y_scaler.fit(self.Y_obs_raw)
             Y_obs = self.Y_obs_raw
@@ -174,7 +174,7 @@ class Selector(ABC):
         if self.pred_clip is not None:
             Y_pred0 = self._clip_raw(Y_pred0)
         
-        if self.value_normalization == "default":
+        if self.value_normalization == "mixed":
             if self.use_distribution():
                 m, s, d = Y_pred0.shape
                 Y_pred_2d = Y_pred0.reshape(m * s, d)
