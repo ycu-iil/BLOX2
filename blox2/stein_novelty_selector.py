@@ -76,7 +76,7 @@ class SteinNoveltySelector(Selector):
                 
             if input_stein_pca_dim is not None:
                 if input_stein_pca_dim <= 0:
-                    raise ValueError("'batch_penalty_pca_dim' must be a positive int or None.")
+                    raise ValueError("'input_stein_pca_dim' must be a positive int or None.")
 
                 if input_stein_pca_dim < self.X_all_processed.shape[1]:
                     pca = PCA(n_components=input_stein_pca_dim, svd_solver="auto", random_state=0)
@@ -99,7 +99,7 @@ class SteinNoveltySelector(Selector):
         if (use_batch_penalty and batch_penalty_type == "stein") or use_input_stein_novelty:
             if isinstance(input_stein_sigma, str):
                 if input_stein_sigma != "auto":
-                    raise ValueError(f"batch_penalty_stein_sigma must be float or 'auto', got {input_stein_sigma}")
+                    raise ValueError(f"'input_stein_sigma' must be float or 'auto', got {input_stein_sigma}")
 
                 X = self.X_all_processed
                 n = X.shape[0]
@@ -118,7 +118,7 @@ class SteinNoveltySelector(Selector):
                     dists = dists[np.triu_indices(n, k=1)]
 
                 sigma = dists.mean()
-                print(f"[Stein batch penalty] Set sigma to: {sigma:.6f}")
+                print(f"Set sigma value of input Stein novelty to: {sigma:.6f}")
 
                 self.input_stein_sigma2 = sigma ** 2
             else:
