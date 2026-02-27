@@ -6,7 +6,7 @@ from .base import Selector, Predictor
 from .utils import stein_novelty_repli
 
 class SteinNoveltySelector(Selector):
-    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, value_normalization: str="before_pred", pred_clip: list[tuple[float | None, float | None]]=None, sigma: float=1.0, n_obs_samples: int=None, use_uncertainty=False, uncertainty_ratio: float=0.5, uncertainty_aggregation_type: str="mean", print_uncertainty: bool=False, use_distribution: bool=False, distribution_pooling_type: str="mean", use_batch_penalty=False, batch_penalty_ratio: float=0.5, batch_penalty_type: str="stein", batch_penalty_stein_sigma: float | str="auto", batch_penalty_pca_dim: int=None, batch_penalty_auto_sigma_max_samples: int=10**5, batch_penalty_cutoff_ratio: float=0.0, batch_penalty_simhash_samples: int=64, chunk_size: int=256, compare_selection_time=False, verbose_plot_dir: str=None):
+    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, value_normalization: str="before_pred", pred_clip: list[tuple[float | None, float | None]]=None, sigma: float=1.0, n_obs_samples: int=None, use_uncertainty=False, uncertainty_ratio: float=0.5, uncertainty_aggregation_type: str="mean", print_uncertainty: bool=False, use_input_stein_novelty: bool=False, use_distribution: bool=False, distribution_pooling_type: str="mean", use_batch_penalty=False, batch_penalty_ratio: float=0.5, batch_penalty_type: str="stein", batch_penalty_stein_sigma: float | str="auto", batch_penalty_pca_dim: int=None, batch_penalty_auto_sigma_max_samples: int=10**5, batch_penalty_cutoff_ratio: float=0.0, batch_penalty_simhash_samples: int=64, chunk_size: int=256, compare_selection_time=False, verbose_plot_dir: str=None):
         """
         Args:
             normalize_features: Whether to normalize input feature values for predictions
@@ -40,9 +40,9 @@ class SteinNoveltySelector(Selector):
 
         self._use_distribution = use_distribution
         self._use_uncertainty = use_uncertainty
-        # self._use_input_stein_novelty = use_input_stein_novelty
-        # if use_uncertainty and use_input_stein_novelty:
-        #     raise ValueError("'use_input_stein_novelty' with 'use_uncertainty' is not supported.")
+        self._use_input_stein_novelty = use_input_stein_novelty
+        if use_uncertainty and use_input_stein_novelty:
+            raise ValueError("'use_input_stein_novelty' with 'use_uncertainty' is not supported.")
         self._use_batch_penalty = use_batch_penalty
         if use_distribution and use_batch_penalty:
             raise ValueError("'use_batch_penalty' with 'use_distribution' is not supported.")
@@ -220,7 +220,7 @@ class SteinNoveltySelector(Selector):
                         
                     # combine
                     final_scores = (1 - self.uncertainty_ratio) * z_scores + self.uncertainty_ratio * uc_z
-                elif self._use_batch_penalty:
+                elif self._use_batch_penalty: # use_batch_penalty but not use_uncertainty (if use_uncertainty, already normalized)
                     final_scores = (scores - sn_m) / sn_s
                 else:
                     final_scores = scores
