@@ -201,7 +201,7 @@ class SteinNoveltySelector(Selector):
 
                 scores = np.sum((dist - dim * sigma2) * np.exp(-dist / (2 * sigma2)), axis=1)
                     
-                if (s == 0) and (self.use_uncertainty() or self._use_batch_penalty):
+                if (s == 0) and (self.use_uncertainty() or self._use_batch_penalty or self._use_input_stein_novelty):
                     # fix Stein novelty scaling based on the first chunk
                     sn_m = scores.mean()
                     sn_s = scores.std()
@@ -230,7 +230,7 @@ class SteinNoveltySelector(Selector):
                     final_scores = (1 - self.uncertainty_ratio) * z_scores + self.uncertainty_ratio * uc_z
                 elif self._use_input_stein_novelty:
                     r = self.input_stein_novelty_ratio
-                    X_obs_full = self.X_all_processed[self.obs_ids()]  # (n_obs, d_feat)
+                    X_obs_full = self.X_all_processed[np.asarray(self.obs_ids, dtype=int)] # (n_obs, d_feat)
 
                     # apply sampling if set (same as output Stein novelty)
                     if self.n_obs_samples is not None and self.n_obs_samples > 0 and self.n_obs_samples < n:
