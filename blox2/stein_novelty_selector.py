@@ -6,9 +6,10 @@ from .base import Selector, Predictor
 from .utils import stein_novelty_repli
 
 class SteinNoveltySelector(Selector):
-    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, value_normalization: str="before_pred", pred_clip: list[tuple[float | None, float | None]]=None, sigma: float=1.0, n_obs_samples: int=None, chunk_size: int=256, use_uncertainty=False, uncertainty_ratio: float=0.5, uncertainty_aggregation_type: str="mean", print_uncertainty: bool=False, use_distribution: bool=False, distribution_pooling_type: str="mean", use_batch_penalty=False, batch_penalty_ratio: float=0.5, batch_penalty_type: str="stein", batch_penalty_stein_sigma: float | str="auto", batch_penalty_pca_dim: int=None, batch_penalty_auto_sigma_max_samples: int=10**5, batch_penalty_cutoff_ratio: float=0.0, batch_penalty_simhash_samples: int=64, compare_selection_time=False, verbose_plot_dir: str=None):
+    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, value_normalization: str="before_pred", pred_clip: list[tuple[float | None, float | None]]=None, sigma: float=1.0, n_obs_samples: int=None, use_uncertainty=False, uncertainty_ratio: float=0.5, uncertainty_aggregation_type: str="mean", print_uncertainty: bool=False, use_distribution: bool=False, distribution_pooling_type: str="mean", use_batch_penalty=False, batch_penalty_ratio: float=0.5, batch_penalty_type: str="stein", batch_penalty_stein_sigma: float | str="auto", batch_penalty_pca_dim: int=None, batch_penalty_auto_sigma_max_samples: int=10**5, batch_penalty_cutoff_ratio: float=0.0, batch_penalty_simhash_samples: int=64, chunk_size: int=256, compare_selection_time=False, verbose_plot_dir: str=None):
         """
         Args:
+            normalize_features: Whether to normalize input feature values for predictions
             value_normalization: 
                 - before_pred: fit and apply before prediction
                 - after_pred: fit and apply after prediction
@@ -31,6 +32,9 @@ class SteinNoveltySelector(Selector):
             batch_penalty_pca_dim: If set to a positive int, apply PCA to X_all_forbatch (input space, used for batch penalty) and reduce its feature dimension to this value.
             batch_penalty_cutoff_ratio: skip batch penalty calculation of bad candidates (per chunk)
             batch_penalty_simhash_samples: number of SimHash bits (<= 64). Used when batch_penalty_type="simhash" or "simhash_min_hamming".
+            
+            chunk_size: The number of candidates in one chunk (for chunked Stein novelty calculation)
+            verbose_plot_dir: If set, saves verbose plots of predicted values and chosen points in each selection step.
         """
         super().__init__(observed_features, observed_values, unobserved_features, predictor, sigma=sigma, normalize_features=normalize_features, value_normalization=value_normalization, pred_clip=pred_clip, verbose_plot_dir=verbose_plot_dir)     
 
