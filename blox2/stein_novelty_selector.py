@@ -35,8 +35,8 @@ class SteinNoveltySelector(Selector):
             batch_penalty_cutoff_ratio: skip batch penalty calculation of bad candidates (per chunk)
             batch_penalty_simhash_samples: number of SimHash bits (<= 64). Used when batch_penalty_type="simhash" or "simhash_min_hamming".
             
-            input_stein_pca_dim: If set to a positive int, apply PCA to X_all_processed (input space, used for batch penalty with 'stein' type or input Stein novelty) and reduce its feature dimension to this value.
-            input_stein_sigma: σ value of Gaussian kernel used for Stein novelty calculation in input space.
+            input_stein_pca_dim: If set to a positive int, apply PCA to X_all_processed (input feature values, used for batch penalty with 'stein' type or input Stein novelty) and reduce its feature dimension to this value.
+            input_stein_sigma: σ value of Gaussian kernel used for Stein novelty calculation in input space (batch penalty with 'stein' type or input Stein novelty).
             
             chunk_size: The number of candidates in one chunk (for chunked Stein novelty calculation)
             verbose_plot_dir: If set, saves verbose plots of predicted values and chosen points in each selection step.
@@ -272,7 +272,7 @@ class SteinNoveltySelector(Selector):
                     chunk_ids = unobs_ids[s:e].astype(int)
                     c = chunk_ids.size
 
-                    # Skip calculation of bad candidates
+                    # skip calculation of bad candidates
                     cutoff = self.batch_penalty_cutoff_ratio
                     n_keep = max(1, int(np.ceil(c * (1.0 - cutoff)))) # always keep >= 1
                     if n_keep >= c:
@@ -388,7 +388,7 @@ class SteinNoveltySelector(Selector):
 
         bits = (P >= 0.0) # (n, b) bool
         codes = np.zeros(n, dtype=np.uint64)
-        # Pack bit j into (1<<j) (LSB-first)
+        # pack bit j into (1<<j) (LSB-first)
         for j in range(b):
             codes |= (bits[:, j].astype(np.uint64) << np.uint64(j))
         return codes
