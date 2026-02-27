@@ -220,7 +220,10 @@ class SteinNoveltySelector(Selector):
                         
                     # combine
                     final_scores = (1 - self.uncertainty_ratio) * z_scores + self.uncertainty_ratio * uc_z
-                elif self._use_batch_penalty: # use_batch_penalty but not use_uncertainty (if use_uncertainty, already normalized)
+                elif self._use_input_stein_novelty:
+                    # TODO
+                    final_scores = (scores - sn_m) / sn_s
+                elif self._use_batch_penalty: # use_batch_penalty but not use_uncertainty or use_input_stein_novelty (cases where final scores are already normalized)
                     final_scores = (scores - sn_m) / sn_s
                 else:
                     final_scores = scores
