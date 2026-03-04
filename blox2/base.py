@@ -49,7 +49,7 @@ class Predictor(ABC):
         raise NotImplementedError
 
 class Selector(ABC):    
-    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, sigma: float | list[tuple[int, float]]=1.0, normalize_features: bool=True, value_normalization: str="before_pred", pred_clip: list[tuple[float | None, float | None]]=None, verbose_plot_dir: str=None):
+    def __init__(self, observed_features: np.ndarray | pd.DataFrame, observed_values: np.ndarray | pd.DataFrame, unobserved_features: np.ndarray | pd.DataFrame, predictor: Predictor, sigma: float | list[tuple[int, float]]=1.0, normalize_features: bool=True, value_normalization: str="before_pred", pred_clip: list[tuple[float | None, float | None]]=None, verbose_plot_dir: str=None):
         """
         value_normalization: 
             - before_pred: fit and apply before prediction
@@ -57,17 +57,18 @@ class Selector(ABC):
             - mixed: apply after prediction, using the scaler fitted before prediction
             - diable: disable
         pred_clip: Valid value range of objectives. This cannot be used with "before_pred".
-        """
-        n_obs = len(observed_features)
-        n_unobs = len(unobserved_features)
+        """        
+        X_obs_raw = np.asarray(observed_features, dtype=float)
+        self.Y_obs_raw = np.asarray(observed_values, dtype=float)
+        X_unobs_raw = np.asarray(unobserved_features, dtype=float)
 
-        if n_obs != len(observed_values):
-            raise ValueError(f"observed_features ({n_obs}) and observed_values ({len(observed_values)}) must have same length.")
+        n_obs = len(X_obs_raw)
+        n_unobs = len(X_unobs_raw)
+
+        if n_obs != len(self.Y_obs_raw):
+            raise ValueError(f"observed_features ({n_obs}) and observed_values ({len(self.Y_obs_raw)}) must have same length.")
+
         self.initial_n_obs = n_obs
-        
-        X_obs_raw = observed_features.to_numpy(dtype=float, copy=True)
-        X_unobs_raw = unobserved_features.to_numpy(dtype=float, copy=True)
-        self.Y_obs_raw = observed_values.to_numpy(dtype=float, copy=True)
         
         if normalize_features:
             self.x_scaler = StandardScaler()
