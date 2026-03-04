@@ -6,7 +6,7 @@ from .base import Selector, Predictor
 from .utils import stein_novelty_repli
 
 class SteinNoveltySelector(Selector):
-    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, value_normalization: str="before_pred", pred_clip: list[tuple[float | None, float | None]]=None, sigma: float=1.0, n_obs_samples: int=None, use_uncertainty=False, uncertainty_ratio: float=0.5, uncertainty_aggregation_type: str="mean", print_uncertainty: bool=False, use_input_stein_novelty: bool=False, input_stein_novelty_ratio: float=0.5, use_distribution: bool=False, distribution_pooling_type: str="mean", use_batch_penalty=False, batch_penalty_ratio: float=0.5, batch_penalty_type: str="stein", batch_penalty_auto_sigma_max_samples: int=10**5, batch_penalty_cutoff_ratio: float=0.0, batch_penalty_simhash_samples: int=64, input_stein_pca_dim: int=None, input_stein_sigma: float | str="auto", chunk_size: int=256, compare_selection_time=False, verbose_plot_dir: str=None):
+    def __init__(self, observed_features: pd.DataFrame, observed_values: pd.DataFrame, unobserved_features: pd.DataFrame, predictor: Predictor, normalize_features: bool=True, value_normalization: str="before_pred", pred_clip: list[tuple[float | None, float | None]]=None, sigma: float=1.0, n_obs_samples: int=None, use_uncertainty=False, uncertainty_ratio: float=0.5, uncertainty_aggregation_type: str="mean", print_uncertainty: bool=False, use_input_stein_novelty: bool=False, input_stein_novelty_ratio: float=0.5, use_distribution: bool=False, distribution_pooling_type: str="mean", use_batch_penalty=False, batch_penalty_ratio: float=0.5, batch_penalty_type: str="stein", batch_penalty_cutoff_ratio: float=0.0, batch_penalty_simhash_bits: int=8, input_stein_pca_dim: int=None, input_stein_sigma: float | str="auto", input_stein_auto_n_samples: int=10**5, chunk_size: int=256, compare_selection_time=False, verbose_plot_dir: str=None):
         """
         Args:
             normalize_features: Whether to normalize input feature values for predictions
@@ -33,10 +33,11 @@ class SteinNoveltySelector(Selector):
             batch_penalty_ratio: Maximize (1 - batch_penalty_ratio) * standardized score for non-batch selections (i.e. standardized Stein novelty, + uncertainty if used) + batch_penalty_ratio * (- standardized batch penalty score) when selecting batch candidates.
             batch_penalty_type: 'stein', 'distance', 'simhash' or 'simhash_min_hamming'
             batch_penalty_cutoff_ratio: skip batch penalty calculation of bad candidates (per chunk)
-            batch_penalty_simhash_samples: number of SimHash bits (<= 64). Used when batch_penalty_type="simhash" or "simhash_min_hamming".
+            batch_penalty_simhash_bits: number of SimHash bits (<= 64). Used when batch_penalty_type="simhash" or "simhash_min_hamming".
             
             input_stein_pca_dim: If set to a positive int, apply PCA to X_all_processed (input feature values, used for batch penalty with 'stein' type or input Stein novelty) and reduce its feature dimension to this value.
-            input_stein_sigma: σ value of Gaussian kernel used for Stein novelty calculation in input space (batch penalty with 'stein' type or input Stein novelty).
+            input_stein_sigma: σ value of Gaussian kernel used for Stein novelty calculation in input space (batch penalty with 'stein' type or input Stein novelty). Set to 'auto' to use mean pairwise distance.
+            input_stein_auto_n_samples: The maximum number of sample pairs when calculating mean pairwise distance.
             
             chunk_size: The number of candidates in one chunk (for chunked Stein novelty calculation)
             verbose_plot_dir: If set, saves verbose plots of predicted values and chosen points in each selection step.
@@ -84,7 +85,7 @@ class SteinNoveltySelector(Selector):
                 else: # already d <= batch_penalty_pca_dim
                     pass
             elif batch_penalty_type in ["simhash", "simhash_min_hamming"]:
-                self.batch_penalty_simhash_samples = batch_penalty_simhash_samples
+                self.batch_penalty_simhash_samples = batch_penalty_simhash_bits
                 if self.batch_penalty_simhash_samples <= 0:
                     raise ValueError("'batch_penalty_simhash_samples' must be a positive int.")
                 if self.batch_penalty_simhash_samples > 64:
@@ -105,7 +106,7 @@ class SteinNoveltySelector(Selector):
                 n = X.shape[0]
 
                 # subsample pairs if too large (avoid O(N^2))
-                max_pairs = batch_penalty_auto_sigma_max_samples
+                max_pairs = input_stein_auto_n_samples
                 if n * (n - 1) // 2 > max_pairs:
                     rng = np.random.default_rng(0)
                     idx1 = rng.integers(0, n, size=max_pairs)
