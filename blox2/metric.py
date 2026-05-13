@@ -185,7 +185,7 @@ def _buffer_union_geometry(pts: np.ndarray, radius: float, resolution: int=4, ca
         from shapely.geometry import Point, Polygon
         from shapely.ops import unary_union
     except Exception as e:
-        raise ImportError("This code requires shapely. Install with `pip install shapely`.") from e
+        raise ImportError("This code requires shapely. Install with `uv pip install shapely`.") from e
     pts = np.asarray(pts, dtype=float)
     if pts.size == 0:
         return Polygon() # empty polygon
@@ -204,7 +204,7 @@ def _iter_polygons(geom):
         from shapely.geometry import Polygon, MultiPolygon
         from shapely.ops import unary_union
     except Exception as e:
-        raise ImportError("This code requires shapely. Install with `pip install shapely`.") from e
+        raise ImportError("This code requires shapely. Install with `uv pip install shapely`.") from e
     
     if geom.is_empty:
         return
