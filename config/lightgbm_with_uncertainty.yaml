@@ -20,12 +20,8 @@ selector_args:
   value_normalization: before_pred
   chunk_size: 512
   use_uncertainty: true
-  uncertainty_ratio: 1.0
+  uncertainty_ratio: 0.5
   uncertainty_aggregation_type: mean
-  # print_uncertainty: true
-  # pred_clip:
-  #   - [0, null]
-  #   - [0, null]
 
 report_interval: 10
 scatter_plot_intervals: [2, 5, 20, 50, 200, 500, 2000, 5000, 20000, 50000]
