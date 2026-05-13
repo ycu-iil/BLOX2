@@ -6,3 +6,5 @@ results/
 tmp/
 hf_token.txt
 personal/
+dist
+uv.lock
