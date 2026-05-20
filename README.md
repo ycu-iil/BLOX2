@@ -64,12 +64,6 @@ It can optionally incorporate predictive uncertainty, input-space novelty, distr
 | `input_stein_sigma`          | `"auto"` | Gaussian kernel bandwidth for input-space Stein novelty. If `"auto"`, the mean pairwise distance is used.                                                                       |
 | `input_stein_auto_n_samples` |  `10**5` | Maximum number of sample pairs used to estimate the mean pairwise distance when `input_stein_sigma="auto"`.                                                                     |
 
-#### Distributional prediction
-| Parameter                   |  Default | Description                                                                                 |
-| --------------------------- | -------: | ------------------------------------------------------------------------------------------- |
-| `use_distribution`          |  `False` | Whether to use predictive distributions from `predictor.pred_samples()`.                    |
-| `distribution_pooling_type` | `"mean"` | How to aggregate Stein novelty scores over predicted samples. Options: `"mean"` or `"max"`. |
-
 #### Batch diversity penalty
 | Parameter                    |   Default | Description                                                                                                                                               |
 | ---------------------------- | --------: | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -78,6 +72,12 @@ It can optionally incorporate predictive uncertainty, input-space novelty, distr
 | `batch_penalty_type`         | `"stein"` | Type of batch penalty. Options: `"stein"`, `"distance"`, `"simhash"`, or `"simhash_min_hamming"`.                                                         |
 | `batch_penalty_cutoff_ratio` |     `0.0` | Skips batch-penalty calculation for low-scoring candidates within each chunk.                                                                             |
 | `batch_penalty_simhash_bits` |       `8` | Number of SimHash bits used when `batch_penalty_type` is `"simhash"` or `"simhash_min_hamming"`. Must be at most 64.                                      |
+
+#### Distributional prediction
+| Parameter                   |  Default | Description                                                                                 |
+| --------------------------- | -------: | ------------------------------------------------------------------------------------------- |
+| `use_distribution`          |  `False` | Whether to use predictive distributions from `predictor.pred_samples()`.                  |
+| `distribution_pooling_type` | `"mean"` | How to aggregate Stein novelty scores over predicted samples. Options: `"mean"` or `"max"`. |
 
 #### Misc
 | Parameter                | Default | Description                                                                                        |
