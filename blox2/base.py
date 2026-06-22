@@ -29,7 +29,6 @@ class Predictor(ABC):
 
         Args:
             X: (m, d_feat) or (d_feat,)
-            n_samples: Number of samples to draw.
 
         Returns:
             samples: (m, n_samples, d_obj)
