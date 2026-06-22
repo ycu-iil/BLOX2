@@ -4,11 +4,6 @@ BLOX2 is an improved version of BLOX[^1]. The original implementations are avail
 
 [^1]: Terayama, K. and Sumita, M. and Tamura, R. and Payne, D. T. and Chahal, M. K. and Ishihara, S. and Tsuda, K. (2020). Pushing property limits in materials discovery via boundless objective-free exploration. <i>Chemical Science</i> [https://doi.org/10.1039/D0SC00982B](https://doi.org/10.1039/D0SC00982B)
 
-## Installation (package only)
-```bash
-uv pip install blox2 numpy==2.4.1 pandas==2.3.3 matplotlib==3.10.8 scikit-learn==1.7.2 lightgbm==4.6.0
-```
-
 ## Installation (with tutorials)
 1. Clone the repository
 2. Install uv: https://docs.astral.sh/uv/getting-started/installation/
@@ -21,6 +16,11 @@ source .venv/bin/activate
 uv pip install blox2 numpy==2.4.1 pandas==2.3.3 matplotlib==3.10.8 scikit-learn==1.7.2 lightgbm==4.6.0 ipykernel==7.1.0
 ```
 
+## Installation (package only)
+```bash
+uv pip install blox2 numpy==2.4.1 pandas==2.3.3 matplotlib==3.10.8 scikit-learn==1.7.2 lightgbm==4.6.0
+```
+
 ## Tutorial
 For a quick start, see `example_usage.ipynb`.
 
@@ -31,9 +31,11 @@ For a quick start, see `example_usage.ipynb`.
 It can optionally incorporate predictive uncertainty, input-space novelty, distributional predictions, and batch diversity penalties.
 
 #### Required inputs
+`observed_features`, `observed_values`, and `unobserved_features` can be provided as either `np.ndarray` or `pd.DataFrame`.
+
 | Parameter             | Description                                                                     |
 | --------------------- | ------------------------------------------------------------------------------- |
-| `observed_features`   | Feature values of already observed samples.                                     |
+| `observed_features`   | Feature values of already observed samples                                  |
 | `observed_values`     | Objective/property values of already observed samples.                          |
 | `unobserved_features` | Feature values of candidate samples to be selected from.                        |
 | `predictor`           | Predictor used to estimate objective/property values for unobserved candidates. |
