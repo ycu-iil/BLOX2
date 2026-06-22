@@ -86,3 +86,6 @@ It can optionally incorporate predictive uncertainty, input-space novelty, distr
 | ------------------------ | ------: | -------------------------------------------------------------------------------------------------- |
 | `chunk_size`             |   `256` | Number of candidates processed in one chunk during chunked Stein novelty calculation.              |
 | `verbose_plot_dir`       |  `None` | If set, saves diagnostic plots of predicted values and selected candidates at each selection step. |
+
+## Predictor
+Although `LightGBMPredictor` was mainly used in our experiments, BLOX2 is not limited to LightGBM. Any predictor can be used by implementing the `Predictor` class. The package also includes sklearn-based predictor implementations, such as `RandomForestPredictor` and `SVRPredictor`, although these implementations do not support uncertainty estimation. When using these predictors, the `lightgbm` dependency can be omitted.
