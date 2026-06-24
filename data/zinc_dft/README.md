@@ -1,6 +1,8 @@
 ## feature_list_mfp2048_rdd.npz
 
-This file contains precomputed feature values for each molecule. To load this feature file, use the `load_features()` function.
+This file contains precomputed feature values for each molecule. (Morgan fingerprints with radius 2 and 2048 bits, together with RDKit descriptors.)
+
+To load this feature file, use the `load_features()` function.
 
 #### Example:
 ```python
