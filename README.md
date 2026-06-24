@@ -89,3 +89,9 @@ It can optionally incorporate predictive uncertainty, input-space novelty, distr
 
 ## Predictor
 Although `LightGBMPredictor` was mainly used in our experiments, BLOX2 is not limited to LightGBM. Any predictor can be used by implementing the `Predictor` class. The package also includes sklearn-based predictor implementations, such as `RandomForestPredictor` and `SVRPredictor`, although these implementations do not support uncertainty estimation. When using these predictors, the `lightgbm` dependency can be omitted.
+
+## License
+
+The BLOX2 source code is licensed under the MIT License.
+
+The files under `data/` are provided for reproducibility and are not covered by the MIT License. See `data/README.md` for the corresponding attribution and license information.
